@@ -3,16 +3,13 @@ from typing import List
 from dotenv import load_dotenv
 from llama_cpp import Llama
 
-# Caminho para o modelo GGML
-MODEL_PATH = "models/mistral-7b-v0.1.Q4_K_M.gguf"  # Substitua pelo caminho do seu modelo
-
-# Carrega o modelo
-llm = Llama(model_path=MODEL_PATH, n_ctx=2048, n_threads=4)  # Ajuste o número de threads conforme a VPS
-
 load_dotenv()
 LOGS_DIR = os.getenv('LOG_PATH')
+MODEL_PATH = os.getenv('MODEL_PATH')
 
 def summarize_logs(logs: str, max_tokens: int = 200) -> str:
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, n_threads=4)
+
     if not logs:
         return "Nenhum log encontrado para sumarização."
 
