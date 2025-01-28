@@ -1,4 +1,5 @@
 import os
+import csv
 from typing import List
 from dotenv import load_dotenv
 from llama_cpp import Llama
@@ -67,19 +68,34 @@ def find_logs_by_character(character_name: str, logs_dir: str = LOGS_DIR) -> Lis
 
 def load_character_logs(character_name: str, logs_dir: str = LOGS_DIR) -> str:
     log_files = find_logs_by_character(character_name, logs_dir)
-    all_logs = ""
+
+    all_texts = []
+
     for log_file in log_files:
         with open(log_file, "r", encoding="utf-8") as file:
-            all_logs += file.read() + "\n"
-    return all_logs.strip()
+            extract_text_from_log(file, all_texts)
+
+    return "\n".join(all_texts).strip()
 
 def load_character_logs_by_date(character_name: str, date: str, logs_dir: str = LOGS_DIR) -> str:
     date_path = os.path.join(logs_dir, date)
     if not os.path.exists(date_path):
         return ""
 
+    texts = []
+
     log_path = os.path.join(date_path, f"{character_name}.log")
     if os.path.exists(log_path):
         with open(log_path, "r", encoding="utf-8") as file:
-            return file.read().strip()
+            extract_text_from_log(file, texts)
+            return "\n".join(texts).strip()
     return ""
+
+
+def extract_text_from_log(file, texts):
+    reader = csv.reader(file)
+    for row in reader:
+        if len(row) > 4:
+            texto_coluna = row[4].strip()
+            if texto_coluna and texto_coluna.lower() != "none":
+                texts.append(texto_coluna)
