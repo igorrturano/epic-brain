@@ -7,6 +7,24 @@ load_dotenv()
 LOGS_DIR = os.getenv('LOG_PATH')
 MODEL_PATH = os.getenv('MODEL_PATH')
 
+def chunk_text(text, max_chunk_size=1000):
+    return [text[i:i+max_chunk_size] for i in range(0, len(text), max_chunk_size)]
+
+
+def summarize_large_logs(logs: str, max_tokens: int = 200) -> str:
+    chunks = chunk_text(logs)
+    llm = Llama(model_path=MODEL_PATH, n_ctx=2048, n_threads=4)
+    for c in chunks:
+        prompt = f"Resuma as ações e falas do personagem nos seguintes logs:\n{c}"
+
+        response = llm(prompt, max_tokens=max_tokens, stop=["\n\n"])
+        print(response['choices'][0]['text'].strip())
+
+    prompt = f"Agora resuma tudo que foi falado pelo personagem"
+
+    response = llm(prompt, max_tokens=max_tokens, stop=["\n\n"])
+    response['choices'][0]['text'].strip()
+
 def summarize_logs(logs: str, max_tokens: int = 200) -> str:
     llm = Llama(model_path=MODEL_PATH, n_ctx=2048, n_threads=4)
 
