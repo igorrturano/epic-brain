@@ -18,7 +18,7 @@ def chunk_text(text: str, chunk_size: int = 1000) -> List[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
-def summarize_logs(logs: str, max_tokens: int = 200, chunk_size: int = 1000) -> str:
+def summarize_logs(logs: str, max_tokens: int = 2048, chunk_size: int = 1000) -> str:
     logs = logs.strip()
     if not logs:
         return "Nenhum log encontrado para sumarização."
