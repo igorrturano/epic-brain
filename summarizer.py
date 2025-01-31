@@ -10,35 +10,52 @@ LOGS_DIR = os.getenv('LOG_PATH', '.')
 MODEL_PATH = os.getenv('MODEL_PATH', '')
 PARTIAL_SUMMARY_PROMPT = os.getenv('PARTIAL_SUMMARY_PROMPT', '')
 FINAL_SUMMARY_PROMPT = os.getenv('FINAL_SUMMARY_PROMPT', '')
+MAX_CONTEXT = os.getenv('MAX_CONTEXT', 1000)
+MAX_THREADS = os.getenv('MAX_THREADS', 4)
 
 
-def get_llm(n_ctx: int = 2048, n_threads: int = 4) -> Llama:
+def get_llm(n_ctx: int = MAX_CONTEXT, n_threads: int = MAX_THREADS) -> Llama:
     return Llama(model_path=MODEL_PATH, n_ctx=n_ctx, n_threads=n_threads, verbose=False)
 
 
 def chunk_text(text: str, chunk_size: int = 1000) -> List[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
-
-def summarize_logs(character_name: str, logs: str, max_tokens: int = 1000) -> str:
+def summarize_large_logs(character_name: str, logs: str, max_tokens: int = 5000) -> Exception | str:
     logs = logs.strip()
     if not logs:
         return "Nenhum log encontrado para sumarização."
 
-    llm = get_llm()
-    chunks = chunk_text(logs)
-    partial_summaries = []
+    try:
+        llm = get_llm()
+        chunks = chunk_text(logs, chunk_size=max_tokens)
+        partial_summaries = []
 
-    for chunk in chunks:
-        prompt = PARTIAL_SUMMARY_PROMPT.format(character_name=character_name, chunk=chunk)
-        response = llm(prompt, max_tokens=max_tokens, stop=["\n\n"])
-        partial_summaries.append(response['choices'][0]['text'].strip())
+        for chunk in chunks:
+            prompt = PARTIAL_SUMMARY_PROMPT.format(character_name=character_name, chunk=chunk)
+            response = llm(prompt, max_tokens=max_tokens, stop=["\n\n"])
+            partial_summaries.append(response['choices'][0]['text'].strip())
 
-    combined_summary = "\n".join(partial_summaries)
-    final_prompt = FINAL_SUMMARY_PROMPT.format(character_name=character_name, combined_summary=combined_summary)
-    final_response = llm(final_prompt, max_tokens=max_tokens, stop=["\n\n"])
-    return final_response['choices'][0]['text'].strip()
+        combined_summary = "\n".join(logs)
+        final_prompt = PARTIAL_SUMMARY_PROMPT.format(character_name=character_name, chunk=combined_summary)
+        final_response = llm(final_prompt, max_tokens=max_tokens, stop=["\n\n"])
+        return final_response['choices'][0]['text'].strip()
+    except Exception as e:
+        return e
 
+
+def summarize_logs(character_name: str, logs: str, max_tokens: int = 1000) -> Exception | str:
+    logs = logs.strip()
+    if not logs:
+        return "Nenhum log encontrado para sumarização."
+
+    try:
+        llm = get_llm()
+        final_prompt = PARTIAL_SUMMARY_PROMPT.format(character_name=character_name, chunk=logs)
+        final_response = llm(final_prompt, max_tokens=max_tokens, stop=["\n\n"])
+        return final_response['choices'][0]['text'].strip()
+    except Exception as e:
+        return e
 
 def find_logs_by_character(character_name: str, logs_dir: str = LOGS_DIR) -> List[str]:
     if not os.path.isdir(logs_dir):
@@ -109,7 +126,7 @@ def load_and_summarize_character_logs(character_name: str, logs_dir: str = LOGS_
     if not logs:
         return f"Nenhum log encontrado para o personagem {character_name}."
 
-    return summarize_logs(logs)
+    return summarize_logs(character_name, logs)
 
 def load_and_summarize_character_logs_by_date(character_name: str, date: str, logs_dir: str = LOGS_DIR) -> str:
     logs = load_character_logs_by_date(character_name, date, logs_dir)
