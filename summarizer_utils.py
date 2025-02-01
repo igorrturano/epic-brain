@@ -29,27 +29,12 @@ def chunk_text(text: str, chunk_size: int = 1000) -> List[str]:
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
-def remove_duplicates(texts):
-    seen = set()
-    unique_texts = []
-    for text in texts:
-        if text not in seen:
-            unique_texts.append(text)
-            seen.add(text)
-    return unique_texts
-
-
 def load_character_logs(character_name: str, logs_dir: str = LOGS_DIR) -> str:
     log_files = find_logs_by_character(character_name, logs_dir)
-    all_texts = []
 
-    for log_file in log_files:
-        with open(log_file, "r", encoding="utf-8") as file:
-            all_texts.extend(extract_text_from_log(file))
+    unique_texts = log_files.drop_duplicates(keep=False)
 
-    unique_texts = remove_duplicates(all_texts)
-
-    return "\n".join(unique_texts).strip()
+    return "\n".join(unique_texts).strip() #Adjust to DF
 
 
 def load_character_logs_by_date(character_name: str, date: str, logs_dir: str = LOGS_DIR) -> str:
@@ -61,12 +46,10 @@ def load_character_logs_by_date(character_name: str, date: str, logs_dir: str = 
     if not os.path.exists(log_path):
         return ""
 
-    with open(log_path, "r", encoding="utf-8") as file:
-        texts = extract_text_from_log(file)
+    log_files = find_logs_by_character(character_name, log_path)
+    unique_texts = log_files.drop_duplicates(keep=False)
 
-    unique_texts = remove_duplicates(texts)
-
-    return "\n".join(unique_texts).strip()
+    return "\n".join(unique_texts).strip() #Adjust to DF
 
 def find_logs_by_character(character_name: str, logs_dir: str = LOGS_DIR) -> DataFrame:
     if not os.path.isdir(logs_dir):
@@ -80,4 +63,4 @@ def find_logs_by_character(character_name: str, logs_dir: str = LOGS_DIR) -> Dat
             if os.path.exists(log_path):
                 log_files.append(log_path)
 
-    return pd.DataFrame(log_files, columns=["data", "personagem", "raça", "coordenadas", "acao_fala", "outros"])
+    return pd.DataFrame(log_files, columns=["date", "character", "race", "coord", "say", "etc"])
