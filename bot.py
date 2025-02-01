@@ -1,29 +1,45 @@
-from discord import client
+import asyncio
+import os
 
-from summarizer import load_and_summarize_character_logs, load_and_summarize_character_logs_by_date
+import discord
+from discord.ext import commands
+from dotenv import load_dotenv
+
+from summarizer import load_and_summarize_character_logs
+
+load_dotenv()
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+request_queue = asyncio.Queue()
+
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
 
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
+async def process_requests():
+    while True:
+        message, character_name = await request_queue.get()
 
-    if message.content.startswith('!resumo'):
-        parts = message.content.split()
-        character_name = parts[1] if len(parts) > 1 else None
-        date = parts[2] if len(parts) > 2 else None
+        try:
+            response = load_and_summarize_character_logs(character_name)
+            await message.channel.send(f"Resumo de {character_name}:\n{response}")
+        except Exception as e:
+            await message.channel.send(f"Erro ao processar a requisição: {e}")
+        finally:
+            request_queue.task_done()
 
-        if not character_name:
-            await message.channel.send("Por favor, informe o nome do personagem.")
-            return
 
-        if date:
-            summary = load_and_summarize_character_logs_by_date(character_name, date)
-        else:
-            summary = load_and_summarize_character_logs(character_name)
+@bot.event
+async def on_ready():
+    print(f'Bot conectado como {bot.user}')
+    asyncio.create_task(process_requests())
 
-        if not summary:
-            await message.channel.send(f"Nenhum log encontrado para o personagem {character_name}.")
-            return
 
-        await message.channel.send(summary)
+@bot.command(name="resumo")
+async def resumo(ctx, character_name: str):
+    await request_queue.put((ctx.message, character_name))
+    await ctx.send(f"Requisição para resumo de {character_name} adicionada à fila. Aguarde...")
+
+
+bot.run(DISCORD_TOKEN)
