@@ -7,7 +7,8 @@ from summarizer_utils import get_llm, chunk_text, load_character_logs, \
 
 load_dotenv()
 
-SUMMARY_PROMPT = os.getenv('SUMMARY_PROMPT', '')
+SYSTEM_MESSAGE = os.getenv('SYSTEM_MESSAGE', '')
+USER_MESSAGE = os.getenv('USER_MESSAGE', '')
 
 
 def summarize_large_logs(character_name: str, logs: str, max_tokens: int = 5000) -> Exception | str:
@@ -21,13 +22,22 @@ def summarize_large_logs(character_name: str, logs: str, max_tokens: int = 5000)
         partial_summaries = []
 
         for chunk in chunks:
-            prompt = SUMMARY_PROMPT.format(character_name=character_name, chunk=chunk)
-            response = llm(prompt, max_tokens=max_tokens, stop=["\n\n"])
+            messages = [
+                {"role": "system", "content": SYSTEM_MESSAGE},
+                {"role": "user", "content": USER_MESSAGE.format(character_name=character_name, logs=chunk)}
+            ]
+
+            response = llm(messages, max_tokens=max_tokens, stop=["\n\n"])
             partial_summaries.append(response['choices'][0]['text'].strip())
 
         combined_summary = "\n".join(logs)
-        final_prompt = SUMMARY_PROMPT.format(character_name=character_name, chunk=combined_summary)
-        final_response = llm(final_prompt, max_tokens=max_tokens, stop=["\n\n"])
+
+        messages = [
+            {"role": "system", "content": SYSTEM_MESSAGE},
+            {"role": "user", "content": USER_MESSAGE.format(character_name=character_name, logs=combined_summary)}
+        ]
+
+        final_response = llm(messages, max_tokens=max_tokens, stop=["\n\n"])
         return final_response['choices'][0]['text'].strip()
     except Exception as e:
         return e
@@ -40,8 +50,13 @@ def summarize_logs(character_name: str, logs: str, max_tokens: int = 1000) -> Ex
 
     try:
         llm = get_llm()
-        final_prompt = SUMMARY_PROMPT.format(character_name=character_name, chunk=logs)
-        final_response = llm(final_prompt, max_tokens=max_tokens, stop=["\n\n"])
+
+        messages = [
+            {"role": "system", "content": SYSTEM_MESSAGE},
+            {"role": "user", "content": USER_MESSAGE.format(character_name=character_name, logs=logs)}
+        ]
+
+        final_response = llm(messages, max_tokens=max_tokens, stop=["\n\n"])
         return final_response['choices'][0]['text'].strip()
     except Exception as e:
         return e
