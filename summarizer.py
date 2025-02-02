@@ -7,8 +7,7 @@ from summarizer_utils import get_llm, chunk_text, load_character_logs, \
 
 load_dotenv()
 
-SYSTEM_MESSAGE = os.getenv('SYSTEM_MESSAGE', '')
-USER_MESSAGE = os.getenv('USER_MESSAGE', '')
+SUMMARY_PROMPT = os.getenv('SUMMARY_PROMPT', '')
 
 
 def summarize_large_logs(character_name: str, logs: str, max_tokens: int = 5000) -> Exception | str:
@@ -22,22 +21,12 @@ def summarize_large_logs(character_name: str, logs: str, max_tokens: int = 5000)
         partial_summaries = []
 
         for chunk in chunks:
-            messages = [
-                {"role": "system", "content": SYSTEM_MESSAGE},
-                {"role": "user", "content": USER_MESSAGE.format(character_name=character_name, logs=chunk)}
-            ]
-
-            response = llm(messages, max_tokens=max_tokens, stop=["\n\n"])
+            response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=chunk), max_tokens=max_tokens, stop=["\n\n"])
             partial_summaries.append(response['choices'][0]['text'].strip())
 
         combined_summary = "\n".join(logs)
 
-        messages = [
-            {"role": "system", "content": SYSTEM_MESSAGE},
-            {"role": "user", "content": USER_MESSAGE.format(character_name=character_name, logs=combined_summary)}
-        ]
-
-        final_response = llm(messages, max_tokens=max_tokens, stop=["\n\n"])
+        final_response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=combined_summary), max_tokens=max_tokens, stop=["\n\n"])
         return final_response['choices'][0]['text'].strip()
     except Exception as e:
         return e
@@ -51,12 +40,7 @@ def summarize_logs(character_name: str, logs: str, max_tokens: int = 1000) -> Ex
     try:
         llm = get_llm()
 
-        messages = [
-            {"role": "system", "content": SYSTEM_MESSAGE},
-            {"role": "user", "content": USER_MESSAGE.format(character_name=character_name, logs=logs)}
-        ]
-
-        final_response = llm(messages, max_tokens=max_tokens, stop=["\n\n"])
+        final_response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=logs), max_tokens=max_tokens, stop=["\n\n"])
         return final_response['choices'][0]['text'].strip()
     except Exception as e:
         return e
