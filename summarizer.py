@@ -21,12 +21,12 @@ def summarize_large_logs(character_name: str, logs: str, max_tokens: int = 5000)
         partial_summaries = []
 
         for chunk in chunks:
-            response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=chunk), max_tokens=max_tokens, stop=["\n\n"])
+            response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=chunk), max_tokens=max_tokens)
             partial_summaries.append(response['choices'][0]['text'].strip())
 
         combined_summary = "\n".join(logs)
 
-        final_response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=combined_summary), max_tokens=max_tokens, stop=["\n\n"])
+        final_response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=combined_summary), max_tokens=max_tokens)
         return final_response['choices'][0]['text'].strip()
     except Exception as e:
         return e
@@ -40,7 +40,7 @@ def summarize_logs(character_name: str, logs: str, max_tokens: int = 1000) -> Ex
     try:
         llm = get_llm()
 
-        final_response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=logs), max_tokens=max_tokens, stop=["\n\n"])
+        final_response = llm(SUMMARY_PROMPT.format(character_name=character_name, logs=logs), max_tokens=max_tokens)
         return final_response['choices'][0]['text'].strip()
     except Exception as e:
         return e
