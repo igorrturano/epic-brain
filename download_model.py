@@ -2,7 +2,7 @@ import os
 import requests
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(verbose=True, override=True)
 MODEL_URL = os.getenv('MODEL_URL')
 MODELS_DIR = os.getenv('MODELS_DIR')
 MODEL_PATH = os.path.join(MODELS_DIR, "model.gguf")

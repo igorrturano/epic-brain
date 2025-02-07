@@ -43,7 +43,7 @@ class SummarizerUtils:
             n_ctx=self.config.max_context,
             n_threads=self.config.max_threads,
             n_batch=self.config.max_batch,
-            n_gpu_layers=self.config.max_gpu_layers,
+            #n_gpu_layers=self.config.max_gpu_layers,
             verbose=False
         )
     
