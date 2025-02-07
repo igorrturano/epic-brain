@@ -11,8 +11,11 @@ load_dotenv()
 
 MAX_CONTEXT = int(os.getenv('MAX_CONTEXT', 1000))
 MAX_THREADS = int(os.getenv('MAX_THREADS', 4))
+MAX_BATCH = int(os.getenv('MAX_BATCH', 512))
+MAX_GPU_LAYERS = int(os.getenv('MAX_GPU_LAYERS', 35))
 MODEL_PATH = os.getenv('MODEL_PATH', "models/model.gguf")
 LOGS_DIR = os.getenv('LOG_PATH', '.')
+
 
 
 def calculate_distance(coord1, coord2):
@@ -20,9 +23,15 @@ def calculate_distance(coord1, coord2):
     x2, y2, z2 = map(int, coord2.split(':'))
     return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
 
-
-def get_llm(n_ctx: int = MAX_CONTEXT, n_threads: int = MAX_THREADS) -> Llama:
-    return Llama(model_path=MODEL_PATH, n_ctx=n_ctx, n_threads=n_threads, verbose=False)
+def get_llm(n_ctx: int = MAX_CONTEXT, n_threads: int = MAX_THREADS, n_batch: int = MAX_BATCH, n_gpu_layers: int = MAX_GPU_LAYERS) -> Llama:
+    return Llama(
+        model_path=MODEL_PATH,
+        n_ctx=n_ctx,
+        n_threads=n_threads,
+        n_batch=n_batch,
+        n_gpu_layers=n_gpu_layers,
+        verbose=False
+    )
 
 
 def chunk_text(text: str, chunk_size: int = 1000) -> List[str]:
