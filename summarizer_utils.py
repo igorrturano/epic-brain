@@ -107,10 +107,16 @@ class SummarizerUtils:
             return """Você é um assistente que fala português. Analise os logs e resuma o comportamento do personagem {character_name}.\n\nLogs:\n{logs}\n\nResumo:"""
 
 
-    def calculate_distance(self, coord1, coord2):
-        x1, y1, z1 = map(int, coord1.split(':'))
-        x2, y2, z2 = map(int, coord2.split(':'))
-        return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
+    def calculate_distance(self, coord1: str, coord2: str) -> float:
+        try:
+            if not coord1 or not coord2 or coord1 == '<uninitialized object>' or coord2 == '<uninitialized object>':
+                return float('inf')
+            
+            x1, y1, z1 = map(int, str(coord1).split(':'))
+            x2, y2, z2 = map(int, str(coord2).split(':'))
+            return np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2 + (z1 - z2) ** 2)
+        except (ValueError, TypeError, AttributeError):
+            return float('inf')
 
     def chunk_text(self, text: str, chunk_size: int = 1000) -> List[str]:
         return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
@@ -135,3 +141,64 @@ class SummarizerUtils:
         unique_texts = log_files.drop_duplicates(subset=['say'], keep='first')
 
         return unique_texts
+
+    def find_nearby_characters(self, main_character: str, date: str, max_distance: float = 10.0) -> List[str]:
+        # Get main character logs for the date
+        main_logs = self.load_character_logs_by_date(main_character, date)
+        if main_logs.empty:
+            return []
+        
+        date_path = os.path.join(self.config.logs_dir, date)
+        nearby_characters = set()
+        
+        # Convert dates to datetime with explicit format
+        main_logs['datetime'] = pd.to_datetime(
+            main_logs['date'], 
+            format='%d-%m-%Y %H:%M:%S', 
+            dayfirst=True
+        )
+        
+        for log_file in os.listdir(date_path):
+            if not log_file.endswith('.log'):
+                continue
+            
+            character_name = log_file.replace('.log', '')
+            if character_name == main_character:
+                continue
+            
+            character_logs = self.load_character_logs_by_date(character_name, date)
+            if character_logs.empty:
+                continue
+            
+            # Convert character logs dates
+            character_logs['datetime'] = pd.to_datetime(
+                character_logs['date'], 
+                format='%d-%m-%Y %H:%M:%S', 
+                dayfirst=True
+            )
+            
+            # Compare coordinates for each time period
+            for _, main_row in main_logs.iterrows():
+                if pd.isna(main_row.get('coord')) or main_row.get('coord') == '<uninitialized object>':
+                    continue
+                
+                main_time = main_row['datetime']
+                
+                # Find logs within the same time window (5 minutes)
+                time_window = character_logs[
+                    (character_logs['datetime'] - main_time).abs() <= pd.Timedelta(minutes=5)
+                ]
+                
+                for _, char_row in time_window.iterrows():
+                    if pd.isna(char_row.get('coord')) or char_row.get('coord') == '<uninitialized object>':
+                        continue
+                    
+                    try:
+                        distance = self.calculate_distance(main_row['coord'], char_row['coord'])
+                        if distance <= max_distance:
+                            nearby_characters.add(character_name)
+                            break
+                    except (ValueError, TypeError):
+                        continue
+        
+        return list(nearby_characters)
