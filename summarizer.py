@@ -1,54 +1,74 @@
-import os
+from dataclasses import dataclass
+from typing import Optional
+from pandas import DataFrame
+from summarizer_utils import SummarizerUtils
 
-from dotenv import load_dotenv
+@dataclass
+class SummarizerConfig:
+    summary_prompt: str
 
-from summarizer_utils import get_llm, load_character_logs, \
-    load_character_logs_by_date, LOGS_DIR
-
-load_dotenv()
-
-SUMMARY_PROMPT = os.getenv('SUMMARY_PROMPT', '')
-
-def create_chat_template(prompt: str) -> str:
-    return f"""<｜User｜> {prompt} <｜Assistant｜>"""
-
-
-def summarize_logs(character_name: str, logs: str, max_tokens: int = 1000) -> Exception | str:
-    logs = logs.strip()
-    if not logs:
-        return "Nenhum log encontrado para sumarização."
-
-    try:
-        llm = get_llm()
-        prompt = SUMMARY_PROMPT.format(
-            character_name=character_name,
-            logs=logs
+class Summarizer:
+    def __init__(self):
+        self.config = self._initialize_config()
+        self.summarizer_utils = SummarizerUtils()
+    
+    def _initialize_config(self) -> SummarizerConfig:
+        return SummarizerConfig(
+            summary_prompt=self._load_prompt_template()
         )
-        formatted_prompt = create_chat_template(prompt)
+    
+    def _load_prompt_template(self) -> str:
+        try:
+            with open('summarization_prompt.txt', 'r', encoding='utf-8') as file:
+                return file.read().strip()
+        except FileNotFoundError:
+            print("Warning: summarization_prompt.txt not found, using default prompt")
+            return """Você é um assistente que fala português..."""
+    
+    def create_chat_template(self, prompt: str) -> str:
+        return f"""[INST] {prompt} [/INST]"""
+    
+    def summarize_logs(self, character_name: str, logs_df: DataFrame, 
+                      max_tokens: int = 1000) -> Optional[str]:
+        if logs_df.empty:
+            return "Nenhum log encontrado para sumarização."
 
-        response = llm(formatted_prompt, 
-                      max_tokens=max_tokens,
-                      temperature=0.7,
-                      top_p=0.9,
-                      stop=["<|Assistant|>", "\n\n"])
-        
+        try:
+            formatted_logs = [
+                f"[{row['date']}] {row['say']}" 
+                for _, row in logs_df.iterrows()
+            ]
+            
+            logs_text = "\n".join(formatted_logs)
+            prompt = self.config.summary_prompt.format(
+                character_name=character_name,
+                logs=logs_text
+            )
+            formatted_prompt = self.create_chat_template(prompt)
 
-        return response['choices'][0]['text'].strip()
-    except Exception as e:
-        return e
+            response = self.summarizer_utils.llm(
+                formatted_prompt,
+                max_tokens=max_tokens,
+                temperature=0.6,
+                top_p=0.9,
+                stop=["[/INST]", "\n\n"]
+            )
+            
+            return response['choices'][0]['text'].strip()
+        except Exception as e:
+            print(f"Error in summarize_logs: {e}")
+            return str(e)
 
-
-def load_and_summarize_character_logs(character_name: str, logs_dir: str = LOGS_DIR) -> str:
-    logs = load_character_logs(character_name, logs_dir)
-    if not logs:
-        return f"Nenhum log encontrado para o personagem {character_name}."
-
-    return summarize_logs(character_name, logs)
-
-
-def load_and_summarize_character_logs_by_date(character_name: str, date: str, logs_dir: str = LOGS_DIR) -> str:
-    logs = load_character_logs_by_date(character_name, date, logs_dir)
-    if not logs:
-        return f"Nenhum log encontrado para o personagem {character_name} na data {date}."
-
-    return summarize_logs(character_name, logs)
+    def summarize_logs_by_date(self, character_name: str, date: str) -> Optional[str]:
+        logs_df = self.summarizer_utils.load_character_logs_by_date(character_name, date)
+        if isinstance(logs_df, str) and not logs_df:
+            return "Nenhum log encontrado para a data especificada."
+            
+        return self.summarize_logs(character_name, logs_df)
+    
+    def summarize_all_logs(self, character_name: str) -> Optional[str]:
+        logs_df = self.summarizer_utils.load_character_logs(character_name)
+        if isinstance(logs_df, str) and not logs_df:
+            return "Nenhum log encontrado para o personagem."
+            
+        return self.summarize_logs(character_name, logs_df)

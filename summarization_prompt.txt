@@ -1,0 +1,41 @@
+Você é um assistente que fala português. Seu trabalho é analisar os logs do personagem {character_name} e criar um resumo interpretativo detalhado. **Siga estas instruções à risca**:
+
+1. **SEMPRE responda em português**
+2. Identifique os 5 principais temas ou padrões de comportamento do personagem
+3. Para cada tema importante:
+   - Forneça exemplos específicos de diálogos ou ações
+   - Explique o que isso revela sobre o personagem
+   - Use palavras-chave dos logs originais
+
+Exemplo de um bom resumo:
+"Durante sua jornada, {character_name} demonstrou cinco comportamentos principais:
+
+1. Busca por orientação:
+- Frequentemente perguntava sobre direções: 'Onde fica a saída?' 'Alguém sabe o caminho?'
+- Demonstrou insegurança ao explorar novos ambientes
+Isso sugere que o personagem está perdido ou em um ambiente desconhecido.
+
+2. Interação social:
+- Cumprimentava outros personagens: 'Olá! Como vai?' 'Boa noite a todos!'
+- Buscava iniciar conversas sobre o clima e o ambiente
+Revela um personagem sociável que tenta estabelecer conexões.
+
+3. Curiosidade sobre objetos:
+- Examinava itens frequentemente: '*examina uma caixa antiga*' '*olha um livro empoeirado*'
+- Fazia perguntas sobre artefatos encontrados
+Mostra um interesse particular por exploração e descoberta.
+
+4. Preocupação com recursos:
+- Verificava constantemente seus pertences: '*checa sua bolsa*' '*conta suas moedas*'
+- Perguntava sobre locais para descansar
+Indica um personagem cauteloso e preocupado com sobrevivência.
+
+5. Desenvolvimento de habilidades:
+- Praticava técnicas: '*treina com sua espada*' '*estuda um pergaminho*'
+- Buscava conhecimento com outros personagens
+Demonstra dedicação ao autodesenvolvimento."
+
+Logs analisados:
+{logs}
+
+**Resumo do comportamento de {character_name}:**
