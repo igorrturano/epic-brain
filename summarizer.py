@@ -76,59 +76,55 @@ class Summarizer:
         return self.summarize_logs(character_name, logs_df)
 
     def process_character_chunk(self, 
+                              main_character: str,
+                              other_character: str,
                               main_logs: pd.DataFrame, 
                               char_logs: pd.DataFrame, 
                               chunk_size: int = 200) -> str:
-        """Process a chunk of character interactions."""
         try:
-            # Ensure datetime column exists and is properly formatted
-            for df in [main_logs, char_logs]:
-                if 'datetime' not in df.columns:
-                    df['datetime'] = pd.to_datetime(
-                        df['date'], 
-                        format='%d-%m-%Y %H:%M:%S',
-                        errors='coerce'
-                    )
+            print(f"  - Processando chunk de interações entre {main_character} e {other_character}")
             
             # Format logs with character names and limit the text size
             formatted_logs = []
             combined_logs = pd.concat([main_logs, char_logs])
             combined_logs = combined_logs.sort_values('datetime', na_position='last').head(chunk_size)
             
-            total_chars = 0
-            max_chars = 1000  # Limit total characters to stay within context window
-            
             for _, log in combined_logs.iterrows():
                 if pd.notna(log['date']) and pd.notna(log['say']):
-                    log_entry = f"[{log['date']}] {log.get('character', 'Unknown')}: {log['say']}"
-                    if total_chars + len(log_entry) > max_chars:
-                        break
-                    formatted_logs.append(log_entry)
-                    total_chars += len(log_entry)
+                    formatted_logs.append(f"[{log['date']}] {log.get('character', 'Unknown')}: {log['say']}")
             
             if not formatted_logs:
+                print(f"    - Nenhuma interação encontrada neste chunk")
                 return ""
             
+            print(f"    - Encontradas {len(formatted_logs)} interações")
             logs_text = "\n".join(formatted_logs)
             
-            # Shorter, more focused prompt
-            chunk_prompt = f"""[INST] Resuma brevemente em português estas interações:
+            chunk_prompt = f"""[INST] Analise e resuma em português as interações entre {main_character} e {other_character}:
 
 {logs_text}
+
+Forneça um breve resumo focando em:
+1. O tipo de interação entre eles
+2. O tom da conversa
+3. Ações importantes realizadas
 
 Resumo: [/INST]"""
 
             response = self.summarizer_utils.llm(
                 chunk_prompt,
-                max_tokens=200,  # Reduced max tokens
+                max_tokens=300,
                 temperature=0.7,
                 top_p=0.9,
                 stop=["[/INST]"]
             )
             
-            return response['choices'][0]['text'].strip()
+            result = response['choices'][0]['text'].strip()
+            if result:
+                print(f"    - Resumo gerado com sucesso ({len(result)} caracteres)")
+            return result
         except Exception as e:
-            print(f"Error processing chunk: {str(e)}")
+            print(f"    - Erro processando chunk: {str(e)}")
             return ""
 
     def summarize_character_interactions(self, 
@@ -137,12 +133,12 @@ Resumo: [/INST]"""
                                        max_distance: float = 10.0,
                                        chunk_size: int = 200) -> Optional[str]:
         try:
-            print(f"Buscando personagens próximos a {main_character}...")
+            print(f"\nBuscando personagens próximos a {main_character}...")
             nearby_chars = self.summarizer_utils.find_nearby_characters(main_character, date, max_distance)
             if not nearby_chars:
                 return f"Nenhuma interação próxima encontrada para {main_character} na data {date}."
             
-            print(f"Encontrados {len(nearby_chars)} personagens próximos.")
+            print(f"Encontrados {len(nearby_chars)} personagens próximos: {', '.join(nearby_chars)}\n")
             
             # Get and prepare main character logs
             main_logs = self.summarizer_utils.load_character_logs_by_date(main_character, date)
@@ -157,11 +153,11 @@ Resumo: [/INST]"""
                 futures = []
                 
                 for char in nearby_chars:
-                    print(f"Processando interações com {char}...")
+                    print(f"\nAnalisando interações com {char}...")
                     char_logs = self.summarizer_utils.load_character_logs_by_date(char, date)
                     
                     if not isinstance(char_logs, pd.DataFrame) or char_logs.empty:
-                        print(f"Pulando {char} - logs não encontrados")
+                        print(f"  - Pulando {char} - logs não encontrados")
                         continue
                     
                     char_logs['character'] = char
@@ -173,59 +169,49 @@ Resumo: [/INST]"""
                         
                         future = executor.submit(
                             self.process_character_chunk,
+                            main_character,
+                            char,
                             main_chunk,
                             char_chunk,
                             chunk_size
                         )
-                        futures.append(future)
+                        futures.append((char, future))
                 
                 # Collect valid results
-                for future in futures:
+                for char, future in futures:
                     result = future.result()
                     if result and len(result.strip()) > 0:
-                        valid_summaries.append(result)
+                        print(f"  - Resumo válido gerado para interação com {char}")
+                        valid_summaries.append(f"Interações com {char}:\n{result}")
             
             if not valid_summaries:
                 return f"Não foi possível gerar resumos válidos para as interações de {main_character}"
             
-            print(f"Gerando resumo final de {len(valid_summaries)} interações válidas...")
+            print(f"\nGerando resumo final de {len(valid_summaries)} interações válidas...")
             
-            # Combine summaries in smaller groups if needed
-            final_summaries = []
-            for i in range(0, len(valid_summaries), 5):  # Process 5 summaries at a time
-                group = valid_summaries[i:i+5]
-                group_prompt = f"""[INST] Combine estes resumos em um único resumo coeso em português:
+            final_prompt = f"""[INST] Combine os seguintes resumos em uma narrativa coesa em português, descrevendo as interações de {main_character} com outros personagens:
 
-{"\n\n".join(group)}
+{"\n\n".join(valid_summaries)}
 
-Resumo: [/INST]"""
-
-                group_response = self.summarizer_utils.llm(
-                    group_prompt,
-                    max_tokens=300,
-                    temperature=0.7,
-                    top_p=0.9,
-                    stop=["[/INST]"]
-                )
-                final_summaries.append(group_response['choices'][0]['text'].strip())
-            
-            # Final combination of all group summaries
-            final_prompt = f"""[INST] Resuma as principais interações entre {main_character} e outros personagens:
-
-{"\n\n".join(final_summaries)}
+Forneça um resumo geral que destaque:
+1. Os principais personagens com quem {main_character} interagiu
+2. O tipo de interações mais frequentes
+3. Momentos importantes ou padrões de comportamento
 
 Resumo final: [/INST]"""
 
             final_response = self.summarizer_utils.llm(
                 final_prompt,
-                max_tokens=500,
-                temperature=0.7,
+                max_tokens=800,
+                temperature=0.6,
                 top_p=0.9,
                 stop=["[/INST]"]
             )
             
-            return final_response['choices'][0]['text'].strip()
+            result = final_response['choices'][0]['text'].strip()
+            print("\nResumo final gerado com sucesso!")
+            return result
             
         except Exception as e:
-            print(f"Error in summarize_character_interactions: {str(e)}")
+            print(f"\nErro em summarize_character_interactions: {str(e)}")
             return str(e)
