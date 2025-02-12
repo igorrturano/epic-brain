@@ -84,6 +84,16 @@ class Summarizer:
         try:
             print(f"  - Processando chunk de interações entre {main_character} e {other_character}")
             
+            # Ensure proper datetime format for both dataframes
+            for df in [main_logs, char_logs]:
+                if 'datetime' not in df.columns:
+                    # Convert the date column to datetime using the correct format
+                    df['datetime'] = pd.to_datetime(
+                        df['date'],
+                        format='%d-%m-%Y %H:%M:%S',
+                        errors='coerce'
+                    )
+            
             # Format logs with character names and limit the text size
             formatted_logs = []
             combined_logs = pd.concat([main_logs, char_logs])
@@ -91,7 +101,11 @@ class Summarizer:
             
             for _, log in combined_logs.iterrows():
                 if pd.notna(log['date']) and pd.notna(log['say']):
-                    formatted_logs.append(f"[{log['date']}] {log.get('character', 'Unknown')}: {log['say']}")
+                    # Format the log entry with coordinates
+                    coord = log.get('coord', 'Unknown location')
+                    char_name = log.get('character', 'Unknown')
+                    log_entry = f"[{log['date']}] ({coord}) {char_name}: {log['say']}"
+                    formatted_logs.append(log_entry)
             
             if not formatted_logs:
                 print(f"    - Nenhuma interação encontrada neste chunk")
@@ -108,6 +122,7 @@ Forneça um breve resumo focando em:
 1. O tipo de interação entre eles
 2. O tom da conversa
 3. Ações importantes realizadas
+4. Locais onde interagiram (baseado nas coordenadas)
 
 Resumo: [/INST]"""
 
@@ -125,7 +140,29 @@ Resumo: [/INST]"""
             return result
         except Exception as e:
             print(f"    - Erro processando chunk: {str(e)}")
+            import traceback
+            print(traceback.format_exc())  # Print full error trace
             return ""
+
+    def load_and_prepare_logs(self, character_name: str, date: str) -> pd.DataFrame:
+        """Helper function to load and prepare logs with correct format"""
+        try:
+            logs_df = self.summarizer_utils.load_character_logs_by_date(character_name, date)
+            if not isinstance(logs_df, pd.DataFrame) or logs_df.empty:
+                return pd.DataFrame()
+            
+            # Ensure all required columns exist
+            logs_df['character'] = character_name
+            logs_df['datetime'] = pd.to_datetime(
+                logs_df['date'],
+                format='%d-%m-%Y %H:%M:%S',
+                errors='coerce'
+            )
+            
+            return logs_df
+        except Exception as e:
+            print(f"Error preparing logs for {character_name}: {str(e)}")
+            return pd.DataFrame()
 
     def summarize_character_interactions(self, 
                                        main_character: str, 
@@ -141,11 +178,9 @@ Resumo: [/INST]"""
             print(f"Encontrados {len(nearby_chars)} personagens próximos: {', '.join(nearby_chars)}\n")
             
             # Get and prepare main character logs
-            main_logs = self.summarizer_utils.load_character_logs_by_date(main_character, date)
-            if not isinstance(main_logs, pd.DataFrame):
+            main_logs = self.load_and_prepare_logs(main_character, date)
+            if main_logs.empty:
                 return f"Erro: Não foi possível carregar os logs de {main_character}"
-            
-            main_logs['character'] = main_character
             
             # Process each character's interactions in parallel
             valid_summaries = []
@@ -154,13 +189,11 @@ Resumo: [/INST]"""
                 
                 for char in nearby_chars:
                     print(f"\nAnalisando interações com {char}...")
-                    char_logs = self.summarizer_utils.load_character_logs_by_date(char, date)
+                    char_logs = self.load_and_prepare_logs(char, date)
                     
-                    if not isinstance(char_logs, pd.DataFrame) or char_logs.empty:
+                    if char_logs.empty:
                         print(f"  - Pulando {char} - logs não encontrados")
                         continue
-                    
-                    char_logs['character'] = char
                     
                     # Process smaller chunks
                     for i in range(0, len(char_logs), chunk_size):
