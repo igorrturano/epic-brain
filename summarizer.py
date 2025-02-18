@@ -80,80 +80,163 @@ class Summarizer:
         return self.summarize_logs(character_name, logs_df)
 
     def process_character_chunk(self, 
-                                main_character: str,
-                                other_character: str,
-                                main_logs: pd.DataFrame, 
-                                char_logs: pd.DataFrame,
-                                max_prompt_tokens: int = 800) -> str:
-        """
-        Build a prompt dynamically by adding one interaction (log) at a time,
-        ensuring the total prompt (instructions + logs) stays within a token limit.
-        """
+                          main_character: str,
+                          other_character: str,
+                          main_logs: pd.DataFrame, 
+                          char_logs: pd.DataFrame, 
+                          chunk_size: int = 50) -> str:
         try:
-            print(f"  - Processando chunk de interações entre {main_character} e {other_character}")
+            print(f"  - Processando interações entre {main_character} e {other_character}")
             
-            # Ensure each dataframe has a datetime column.
+            # Ensure both DataFrames have datetime column
             for df in [main_logs, char_logs]:
                 if 'datetime' not in df.columns:
-                    df['datetime'] = pd.to_datetime(
-                        df['date'],
-                        format='%d-%m-%Y %H:%M:%S',
-                        errors='coerce'
-                    )
+                    df['datetime'] = pd.to_datetime(df['date'], format='%d-%m-%Y %H:%M:%S')
             
-            # Concatenate and sort logs by datetime.
+            # Format logs with character names but limit size strictly
+            formatted_logs = []
             combined_logs = pd.concat([main_logs, char_logs])
-            combined_logs = combined_logs.sort_values('datetime', na_position='last')
+            combined_logs = combined_logs.sort_values('datetime', na_position='last').head(chunk_size)
             
-            # Define the fixed instruction parts.
-            instruction_prefix = f"[INST] Analise e resuma em português as interações entre {main_character} e {other_character}:\n\n"
-            instruction_suffix = ("\n\nForneça um breve resumo focando em:\n"
-                                  "1. O tipo de interação entre eles\n"
-                                  "2. O tom da conversa\n"
-                                  "3. Ações importantes realizadas\n"
-                                  "4. Locais onde interagiram (baseado nas coordenadas)\n\n"
-                                  "Resumo: [/INST]")
+            total_chars = 0
+            max_chars = 2000  # Strict character limit
             
-            log_lines = []
-            # Add one log (formatted as a line) at a time until the prompt is near the limit.
             for _, log in combined_logs.iterrows():
                 if pd.notna(log['date']) and pd.notna(log['say']):
-                    coord = log.get('coord', 'Unknown location')
-                    char_name = log.get('character', 'Unknown')
-                    log_line = f"[{log['date']}] ({coord}) {char_name}: {log['say']}"
-                    # Build a candidate prompt including the new line.
-                    candidate_text = instruction_prefix + "\n".join(log_lines + [log_line]) + instruction_suffix
-                    if approximate_token_count(candidate_text) > max_prompt_tokens:
-                        # Reached near the token limit; stop adding new lines.
+                    log_entry = f"[{log['date']}] {log.get('character', 'Unknown')}: {log['say']}"
+                    if total_chars + len(log_entry) > max_chars:
                         break
-                    log_lines.append(log_line)
+                    formatted_logs.append(log_entry)
+                    total_chars += len(log_entry)
             
-            if not log_lines:
-                print("    - Nenhuma interação cabe no prompt limitado.")
+            if not formatted_logs:
                 return ""
             
-            logs_text = "\n".join(log_lines)
-            prompt = instruction_prefix + logs_text + instruction_suffix
-            # (Optional) Uncomment the following line to see the approximate token count.
-            # print(f"Prompt token count: {approximate_token_count(prompt)}")
+            logs_text = "\n".join(formatted_logs)
             
+            # Simplified prompt to reduce context size
+            chunk_prompt = f"""[INST] Resuma em português estas interações entre {main_character} e {other_character}:
+
+{logs_text}
+
+Resumo breve: [/INST]"""
+
             response = self.summarizer_utils.llm(
-                prompt,
-                max_tokens=300,
+                chunk_prompt,
+                max_tokens=150,
                 temperature=0.7,
                 top_p=0.9,
                 stop=["[/INST]"]
             )
             
-            result = response['choices'][0]['text'].strip()
-            if result:
-                print(f"    - Resumo gerado com sucesso ({len(result)} caracteres)")
-            return result
+            return response['choices'][0]['text'].strip()
         except Exception as e:
-            print(f"    - Erro processando chunk: {str(e)}")
-            import traceback
-            print(traceback.format_exc())
+            print(f"    - Erro: {str(e)}")
             return ""
+
+    def summarize_character_interactions(self, 
+                                   main_character: str, 
+                                   date: str, 
+                                   max_distance: float = 10.0) -> Optional[str]:
+        try:
+            print(f"\nBuscando personagens próximos a {main_character}...")
+            nearby_chars = self.summarizer_utils.find_nearby_characters(main_character, date, max_distance)
+            if not nearby_chars:
+                return f"Nenhuma interação próxima encontrada para {main_character} na data {date}."
+            
+            print(f"Encontrados {len(nearby_chars)} personagens próximos.")
+            
+            # Get main character logs and prepare datetime
+            main_logs = self.summarizer_utils.load_character_logs_by_date(main_character, date)
+            if not isinstance(main_logs, pd.DataFrame):
+                return f"Erro: Não foi possível carregar os logs de {main_character}"
+            
+            main_logs['character'] = main_character
+            main_logs['datetime'] = pd.to_datetime(main_logs['date'], format='%d-%m-%Y %H:%M:%S')
+            
+            # Process each character's interactions
+            all_summaries = []
+            
+            for char in nearby_chars:
+                print(f"\nProcessando interações com {char}...")
+                char_logs = self.summarizer_utils.load_character_logs_by_date(char, date)
+                
+                if not isinstance(char_logs, pd.DataFrame) or char_logs.empty:
+                    print(f"  - Pulando {char} - logs não encontrados")
+                    continue
+                
+                char_logs['character'] = char
+                char_logs['datetime'] = pd.to_datetime(char_logs['date'], format='%d-%m-%Y %H:%M:%S')
+                
+                # Get time range for this character's logs
+                start_time = char_logs['datetime'].min()
+                end_time = char_logs['datetime'].max()
+                
+                if pd.isna(start_time) or pd.isna(end_time):
+                    print(f"  - Pulando {char} - datas inválidas")
+                    continue
+                
+                # Process in smaller time windows
+                window_size = pd.Timedelta(minutes=30)
+                time_windows = []
+                
+                current_time = start_time
+                while current_time < end_time:
+                    window_end = current_time + window_size
+                    
+                    # Get logs for this time window
+                    char_window = char_logs[
+                        (char_logs['datetime'] >= current_time) & 
+                        (char_logs['datetime'] < window_end)
+                    ]
+                    main_window = main_logs[
+                        (main_logs['datetime'] >= current_time) & 
+                        (main_logs['datetime'] < window_end)
+                    ]
+                    
+                    if not char_window.empty and not main_window.empty:
+                        summary = self.process_character_chunk(
+                            main_character,
+                            char,
+                            main_window,
+                            char_window,
+                            chunk_size=50
+                        )
+                        if summary:
+                            time_windows.append(summary)
+                
+                    current_time = window_end
+                
+                if time_windows:
+                    # Combine summaries for this character
+                    char_summary = f"Interações com {char}:\n" + "\n".join(time_windows)
+                    all_summaries.append(char_summary)
+            
+            if not all_summaries:
+                return f"Não foi possível gerar resumos válidos para as interações de {main_character}"
+            
+            print("\nCombinando resumos finais...")
+            
+            # Combine all summaries into one
+            final_prompt = f"""[INST] Combine estes resumos de interações em um único resumo em português:
+
+{"\n\n".join(all_summaries)}
+
+Resumo final das interações de {main_character}: [/INST]"""
+
+            response = self.summarizer_utils.llm(
+                final_prompt,
+                max_tokens=500,
+                temperature=0.7,
+                top_p=0.9,
+                stop=["[/INST]"]
+            )
+            
+            return response['choices'][0]['text'].strip()
+            
+        except Exception as e:
+            print(f"Erro: {str(e)}")
+            return str(e)
 
     def hierarchical_summary(self, summaries: List[str], main_character: str, max_tokens: int = 1800) -> str:
         """
@@ -208,72 +291,6 @@ Resumo: [/INST]"""
 
         return intermediate[0] if intermediate else ""
 
-    def summarize_character_interactions(self, 
-                                         main_character: str, 
-                                         date: str, 
-                                         max_distance: float = 10.0,
-                                         chunk_size: int = 200) -> Optional[str]:
-        try:
-            print(f"\nBuscando personagens próximos a {main_character}...")
-            nearby_chars = self.summarizer_utils.find_nearby_characters(main_character, date, max_distance)
-            if not nearby_chars:
-                return f"Nenhuma interação próxima encontrada para {main_character} na data {date}."
-            
-            print(f"Encontrados {len(nearby_chars)} personagens próximos: {', '.join(nearby_chars)}\n")
-            
-            # Get and prepare main character logs.
-            main_logs = self.load_and_prepare_logs(main_character, date)
-            if main_logs.empty:
-                return f"Erro: Não foi possível carregar os logs de {main_character}"
-            
-            valid_summaries = []
-            with ThreadPoolExecutor(max_workers=4) as executor:
-                futures = []
-                
-                for char in nearby_chars:
-                    print(f"\nAnalisando interações com {char}...")
-                    char_logs = self.load_and_prepare_logs(char, date)
-                    
-                    if char_logs.empty:
-                        print(f"  - Pulando {char} - logs não encontrados")
-                        continue
-                    
-                    # Here we still split the logs into chunks (by row count) for parallel processing.
-                    for i in range(0, len(char_logs), chunk_size):
-                        char_chunk = char_logs.iloc[i:i + chunk_size].copy()
-                        # For the main character, we take a chunk from the beginning (or adjust as needed).
-                        main_chunk = main_logs.iloc[0:min(chunk_size, len(main_logs))].copy()
-                        # Use the new dynamic chunk builder by specifying max_prompt_tokens.
-                        future = executor.submit(
-                            self.process_character_chunk,
-                            main_character,
-                            char,
-                            main_chunk,
-                            char_chunk,
-                            800  # max_prompt_tokens
-                        )
-                        futures.append((char, future))
-                
-                for char, future in futures:
-                    result = future.result()
-                    if result and len(result.strip()) > 0:
-                        print(f"  - Resumo válido gerado para interação com {char}")
-                        valid_summaries.append(f"Interações com {char}:\n{result}")
-            
-            if not valid_summaries:
-                return f"Não foi possível gerar resumos válidos para as interações de {main_character}"
-            
-            print(f"\nGerando resumo final de {len(valid_summaries)} interações válidas...")
-            
-            final_result = self.hierarchical_summary(valid_summaries, main_character)
-            
-            print("\nResumo final gerado com sucesso!")
-            return final_result
-            
-        except Exception as e:
-            print(f"\nErro em summarize_character_interactions: {str(e)}")
-            return str(e)
-    
     def load_and_prepare_logs(self, character_name: str, date: str) -> pd.DataFrame:
         """Helper function to load and prepare logs with correct format."""
         try:
