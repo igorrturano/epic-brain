@@ -11,8 +11,8 @@ import re
 load_dotenv()
 
 app = FastAPI(
-    title="Epic Brain Translation API",
-    description="API for translating text using LLM",
+    title="Epic Brain Service API",
+    description="API for using LLM",
     version="1.0.0"
 )
 
@@ -64,16 +64,30 @@ async def translate_text(request: Request, translation_request: TranslationReque
             
         # Create a simpler prompt for raw completion
         if translation_request.original_language:
-            prompt = f"""Translate this text from {translation_request.original_language} to {translation_request.target_language}:
+            prompt = f"""You are a translator. Here are some examples:
 
-"{translation_request.message}"
+Input: "Hello, world!"
+Translation to Portuguese: "Olá, mundo!"
 
+Input: "Good morning"
+Translation to Portuguese: "Bom dia"
+
+Now translate this text from {translation_request.original_language} to {translation_request.target_language}:
+
+Input: "{translation_request.message}"
 Translation: """
         else:
-            prompt = f"""Translate this text to {translation_request.target_language}:
+            prompt = f"""You are a translator. Here are some examples:
 
-"{translation_request.message}"
+Input: "Hello, world!"
+Translation to Portuguese: "Olá, mundo!"
 
+Input: "Good morning"
+Translation to Portuguese: "Bom dia"
+
+Now translate this text to {translation_request.target_language}:
+
+Input: "{translation_request.message}"
 Translation: """
 
         print(f"Using raw completion with prompt: {prompt}")
@@ -82,8 +96,9 @@ Translation: """
         response = llm(
             prompt,
             max_tokens=len(translation_request.message) * 2,
-            temperature=0.3,
-            stop=["<", "\n\n", "Translation:"]
+            temperature=0.1,  # Keep very low for consistent output
+            top_p=0.1,  # Keep very low for focused output
+            stop=["<", "\n", "Translation:", "Input:"]
         )
         
         print(f"Raw response: {response}")
@@ -92,8 +107,11 @@ Translation: """
         translated_text = response['choices'][0]['text'].strip()
         print(f"Extracted text: {translated_text}")
 
-        # Fallback: if translation failed, try simple rule-based translations for common phrases
-        if not translated_text or len(translated_text) < 1:
+        # Basic cleanup - remove quotes if present
+        translated_text = translated_text.replace('"', '').strip()
+
+        # Validate translation and use fallbacks if needed
+        if not translated_text or len(translated_text) < 2 or translated_text in ['?', '！', '。', '.']: 
             # Simple fallback dictionary for common phrases
             fallbacks = {
                 "Hello, world!": {
@@ -120,7 +138,7 @@ Translation: """
             else:
                 raise HTTPException(
                     status_code=500,
-                    detail="Translation failed: Empty response from model"
+                    detail="Translation failed: Invalid response from model"
                 )
         
         # Return translation
