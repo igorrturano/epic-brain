@@ -84,7 +84,7 @@ class Summarizer:
                           other_character: str,
                           main_logs: pd.DataFrame, 
                           char_logs: pd.DataFrame, 
-                          chunk_size: int = 50) -> str:
+                          chunk_size: int = 20) -> str:
         try:
             print(f"  - Processando interações entre {main_character} e {other_character}")
             
@@ -99,11 +99,16 @@ class Summarizer:
             combined_logs = combined_logs.sort_values('datetime', na_position='last').head(chunk_size)
             
             total_chars = 0
-            max_chars = 2000  # Strict character limit
+            max_chars = 800  # Reduced from 2000 to 800 characters maximum
             
             for _, log in combined_logs.iterrows():
                 if pd.notna(log['date']) and pd.notna(log['say']):
-                    log_entry = f"[{log['date']}] {log.get('character', 'Unknown')}: {log['say']}"
+                    # Truncate very long messages
+                    say = log['say']
+                    if len(say) > 100:
+                        say = say[:100] + "..."
+                        
+                    log_entry = f"{log.get('character', 'Unknown')}: {say}"
                     if total_chars + len(log_entry) > max_chars:
                         break
                     formatted_logs.append(log_entry)
@@ -114,16 +119,22 @@ class Summarizer:
             
             logs_text = "\n".join(formatted_logs)
             
-            # Simplified prompt to reduce context size
-            chunk_prompt = f"""[INST] Resuma em português estas interações entre {main_character} e {other_character}:
+            # Very simplified prompt to reduce context size
+            chunk_prompt = f"""[INST] Resuma brevemente em português as interações entre {main_character} e {other_character}:
 
 {logs_text}
 
-Resumo breve: [/INST]"""
+Resumo: [/INST]"""
 
+            # Rough token count estimate to ensure we're within limits
+            estimated_tokens = len(chunk_prompt) // 4
+            if estimated_tokens > 900:  # Safety margin
+                # If still too large, further truncate
+                return f"Interação entre {main_character} e {other_character} detectada, mas muito extensa para resumir."
+                
             response = self.summarizer_utils.llm(
                 chunk_prompt,
-                max_tokens=150,
+                max_tokens=100,  # Reduced from 150 to 100
                 temperature=0.7,
                 top_p=0.9,
                 stop=["[/INST]"]
@@ -200,7 +211,7 @@ Resumo breve: [/INST]"""
                             char,
                             main_window,
                             char_window,
-                            chunk_size=50
+                            chunk_size=20
                         )
                         if summary:
                             time_windows.append(summary)
@@ -217,40 +228,30 @@ Resumo breve: [/INST]"""
             
             print("\nCombinando resumos finais...")
             
-            # Combine all summaries into one
-            final_prompt = f"""[INST] Combine estes resumos de interações em um único resumo em português:
-
-{"\n\n".join(all_summaries)}
-
-Resumo final das interações de {main_character}: [/INST]"""
-
-            response = self.summarizer_utils.llm(
-                final_prompt,
-                max_tokens=500,
-                temperature=0.7,
-                top_p=0.9,
-                stop=["[/INST]"]
-            )
-            
-            return response['choices'][0]['text'].strip()
+            # Use hierarchical summarization to ensure we don't exceed context limits
+            return self.hierarchical_summary(all_summaries, main_character)
             
         except Exception as e:
             print(f"Erro: {str(e)}")
             return str(e)
 
-    def hierarchical_summary(self, summaries: List[str], main_character: str, max_tokens: int = 1800) -> str:
+    def hierarchical_summary(self, summaries: List[str], main_character: str, max_tokens: int = 800) -> str:
         """
         Recursively combine summaries to ensure the prompt does not exceed the context window.
         This function chunks the summaries into groups (by character count), summarizes each chunk,
         and then combines the intermediate summaries into a final summary.
         """
         # Using a rough conversion: max_tokens * 4 characters for the maximum allowed characters.
-        max_chunk_chars = max_tokens * 4
+        max_chunk_chars = max_tokens * 3  # More conservative estimate (was 4)
 
         def combine_into_chunks(summaries_list: List[str]) -> List[str]:
             chunks = []
             current_chunk = ""
             for summary in summaries_list:
+                # Limit individual summary size first
+                if len(summary) > max_chunk_chars:
+                    summary = summary[:max_chunk_chars] + "..."
+                    
                 addition = ("\n\n" + summary) if current_chunk else summary
                 if len(current_chunk) + len(addition) > max_chunk_chars:
                     chunks.append(current_chunk)
@@ -263,33 +264,53 @@ Resumo final das interações de {main_character}: [/INST]"""
 
         intermediate = summaries
         iteration = 0
+        max_iterations = 3  # Prevent infinite loops
 
-        while len(intermediate) > 1:
+        while len(intermediate) > 1 and iteration < max_iterations:
             iteration += 1
             new_intermediate = []
             chunks = combine_into_chunks(intermediate)
             print(f"Hierarchical summarization iteration {iteration}: combinando {len(intermediate)} resumos em {len(chunks)} chunks.")
+            
             for chunk in chunks:
-                prompt = f"""[INST] Analise e combine os seguintes resumos de interações em uma narrativa coesa, focando nos aspectos principais das interações de {main_character}:
+                # Very simplified prompt
+                prompt = f"""[INST] Combine estes resumos em um único resumo sobre as interações de {main_character}:
 
 {chunk}
 
 Resumo: [/INST]"""
-                if approximate_token_count(prompt) > 2016:
-                    print("Aviso: o prompt pode ainda exceder o limite de contexto. Considere reduzir o tamanho do chunk.")
+
+                # Check if prompt is too large before sending
+                estimated_tokens = len(prompt) // 4
+                if estimated_tokens > 900:  # Safety buffer below 1000
+                    print(f"Warning: Prompt too large ({estimated_tokens} est. tokens). Truncating...")
+                    continue
                 
-                response = self.summarizer_utils.llm(
-                    prompt,
-                    max_tokens=300,
-                    temperature=0.6,
-                    top_p=0.9,
-                    stop=["[/INST]"]
-                )
-                intermediate_summary = response['choices'][0]['text'].strip()
-                new_intermediate.append(intermediate_summary)
+                try:
+                    response = self.summarizer_utils.llm(
+                        prompt,
+                        max_tokens=200,  # Reduced from 300
+                        temperature=0.6,
+                        top_p=0.9,
+                        stop=["[/INST]"]
+                    )
+                    intermediate_summary = response['choices'][0]['text'].strip()
+                    new_intermediate.append(intermediate_summary)
+                except Exception as e:
+                    print(f"Error in hierarchical summarization: {str(e)}")
+                    # Continue with other chunks rather than failing
+            
+            if not new_intermediate:
+                # If we couldn't process any chunks, break to avoid infinite loop
+                break
+                
             intermediate = new_intermediate
 
-        return intermediate[0] if intermediate else ""
+        # Return the first summary or a simple message if we couldn't summarize
+        if intermediate and len(intermediate[0]) > 10:  # Sanity check on output
+            return intermediate[0]
+        else:
+            return f"Foram detectadas interações para {main_character}, mas não foi possível resumir devido a limitações de contexto."
 
     def load_and_prepare_logs(self, character_name: str, date: str) -> pd.DataFrame:
         """Helper function to load and prepare logs with correct format."""
