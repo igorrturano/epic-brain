@@ -85,22 +85,47 @@ class IngestionPipeline:
             date = parts[1]  # players/date
             player_name = raw_path.stem  # Get player name from filename without extension
             
-            # Create metadata
-            metadata = {
-                "source": str(raw_path),
-                "filename": raw_path.name,
-                "player": player_name,
-                "date": date
-            }
-            
-            # Split text into chunks
-            texts = self.text_splitter.split_text(content)
-            
-            # Create documents with metadata
-            documents = [
-                Document(page_content=text, metadata=metadata)
-                for text in texts
-            ]
+            # Process log entries
+            documents = []
+            for line in content.splitlines():
+                if not line.strip():
+                    continue
+                    
+                try:
+                    # Parse log entry
+                    # Format: date,account,race,location,text,characters_proximity
+                    timestamp, account, race, location, text, proximity = line.strip().split(',', 5)
+                    
+                    # Create a context-rich text for better semantic search
+                    context_text = f"Em {timestamp}, {account} ({race}) estava em {location}"
+                    if proximity and proximity != "None":
+                        context_text += f" próximo de {proximity}"
+                    context_text += f". {account} disse: {text}"
+                    
+                    # Create metadata with all relevant information
+                    # Convert None values to empty strings for Chroma compatibility
+                    metadata = {
+                        "source": str(raw_path),
+                        "filename": raw_path.name,
+                        "player": player_name,
+                        "date": date,
+                        "timestamp": timestamp,
+                        "account": account,
+                        "race": race,
+                        "location": location,
+                        "proximity": proximity if proximity != "None" else ""
+                    }
+                    
+                    # Create document with context-rich text and metadata
+                    doc = Document(
+                        page_content=context_text,
+                        metadata=metadata
+                    )
+                    documents.append(doc)
+                    
+                except ValueError as e:
+                    logger.warning(f"Could not parse line in {raw_path}: {line.strip()}")
+                    continue
             
             return documents
             
