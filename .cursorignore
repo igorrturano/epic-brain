@@ -1,0 +1,29 @@
+# Environment variables and secrets
+.env
+.env.*
+*.key
+*.pem
+*.cert
+
+# Data directories
+data/raw/*
+data/processed/*
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Build and cache directories
+__pycache__/
+*.py[cod]
+build/
+dist/
+
+# IDE specific
+.vscode/
+.idea/
+
+# Logs
+*.log
+logs/ 

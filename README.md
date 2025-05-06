@@ -64,16 +64,26 @@
 
 ## How to Use
 
-1. **On Discord**, send a message in the following format:
+1. **For a command line summary**, run:
+   ```bash
+   python main.py [number_of_characters]
+   ```
+   Where `[number_of_characters]` is optional and specifies how many nearby characters to process (default: 5).
+
+2. **On Discord**, send a message in the following format:
    ```
    !resumo character_X
    ```
    The bot will respond with a summary of the actions and an interpretation of the character's behavior.
 
-2. **Example Response**:
-   ```
-   It appears that XXXXX is lost and trying to find their routine. They asked where things were and **opened a small box**, possibly in search of something. Their action of **opening the small box** can be interpreted as a gesture of desperation or a search for guidance.
-   ```
+## Performance Notes
+
+The system processes character interactions sequentially for maximum reliability. Processing time depends on:
+- Number of characters analyzed (use the command line parameter to control this)
+- Size of character logs
+- Hardware specifications
+
+Processing typically takes 2-5 minutes for 5 characters on average hardware. Results are cached, so subsequent runs for the same character and date will be much faster.
 
 ## Project Structure
 
