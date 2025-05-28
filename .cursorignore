@@ -13,6 +13,7 @@ data/processed/*
 venv/
 env/
 ENV/
+.venv/
 
 # Build and cache directories
 __pycache__/

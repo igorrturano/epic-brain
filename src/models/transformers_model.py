@@ -19,7 +19,7 @@ class TransformersModel(BaseModel):
             config: Model configuration dictionary
         """
         super().__init__(config)
-        self.model_name = config.get("model_name", "mistralai/Mistral-7B-Instruct-v0.2")
+        self.model_name = config.get("model_name", "maritaca-ai/sabia-7b")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.quantization_config = None
         
