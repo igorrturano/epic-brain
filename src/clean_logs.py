@@ -1,10 +1,10 @@
 import os
 import re
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import pandas as pd
-from config import RAW_DATA_DIR
+from config import RAW_DATA_DIR, LOG_CONFIG
 
 class LogCleaner:
     def __init__(self, directory: str = RAW_DATA_DIR):
@@ -15,7 +15,32 @@ class LogCleaner:
             directory (str): The root directory containing log files
         """
         self.root_dir = Path(directory)
+        self.max_days_old = LOG_CONFIG["max_days_old"]
+        self.date_format = LOG_CONFIG["date_format"]
         
+    def is_file_recent(self, file_path: Path) -> bool:
+        """
+        Check if the log file is within the configured time window.
+        
+        Args:
+            file_path (Path): Path to the log file
+            
+        Returns:
+            bool: True if the file is recent enough to process
+        """
+        try:
+            # Extract date from path (e.g., raw/players/17-01-2025/player1.log)
+            date_str = file_path.parent.name
+            file_date = datetime.strptime(date_str, self.date_format)
+            
+            # Calculate the cutoff date
+            cutoff_date = datetime.now() - timedelta(days=self.max_days_old)
+            
+            return file_date >= cutoff_date
+        except ValueError:
+            print(f"Could not parse date from path: {file_path}")
+            return False
+
     def parse_log_line(self, line: str) -> Dict[str, Any]:
         """
         Parse a single log line into structured data.
@@ -109,17 +134,22 @@ class LogCleaner:
 
     def process_logs(self) -> pd.DataFrame:
         """
-        Process all log files in the directory.
+        Process all log files in the directory that are within the configured time window.
         
         Returns:
             DataFrame containing all cleaned log entries
         """
         all_entries = []
         
-        # Find all log files
-        log_files = list(self.root_dir.rglob('*.log'))
+        # Find all log files matching the pattern
+        log_files = list(self.root_dir.glob(LOG_CONFIG["log_pattern"]))
         
         for file_path in log_files:
+            # Skip files that are too old
+            if not self.is_file_recent(file_path):
+                print(f"Skipping old file: {file_path}")
+                continue
+                
             print(f"Processing {file_path}...")
             entries = self.clean_log_file(file_path)
             all_entries.extend(entries)
@@ -152,8 +182,17 @@ def clean_log_files(directory: str = RAW_DATA_DIR):
     Args:
         directory (str): The root directory to start searching for log files
     """
+    # Create necessary directories
+    directory_path = Path(directory)
+    directory_path.mkdir(parents=True, exist_ok=True)
+    
     cleaner = LogCleaner(directory)
     df = cleaner.process_logs()
+    
+    if df.empty:
+        print("No log files found to process.")
+        return
+        
     cleaner.save_cleaned_logs(df)
 
 if __name__ == '__main__':
