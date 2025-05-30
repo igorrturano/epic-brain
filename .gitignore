@@ -49,6 +49,7 @@ data/processed/*
 *.log
 logs/
 *.csv
+!logs/.gitkeep
 
 # LLM models
 model/
