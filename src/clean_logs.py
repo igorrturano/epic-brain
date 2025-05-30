@@ -179,6 +179,19 @@ class LogCleaner:
         """
         output_path = self.root_dir / output_file
         
+        # Delete old cleaned log files
+        try:
+            # Find all existing cleaned log files
+            old_files = list(self.root_dir.glob("cleaned_logs*.csv"))
+            for old_file in old_files:
+                try:
+                    old_file.unlink()
+                    print(f"Deleted old file: {old_file}")
+                except Exception as e:
+                    print(f"Warning: Could not delete {old_file}: {str(e)}")
+        except Exception as e:
+            print(f"Warning: Error while cleaning up old files: {str(e)}")
+        
         # Save with proper quoting and escaping
         df.to_csv(
             output_path,
