@@ -43,8 +43,8 @@ def test_questions():
     """
     questions = [
         {
-            "question": "Qual o limite legal e o limite prudencial dos encargos sociais do conselho nacional de justiça?",
-            "expected_answer": "Conselho Nacional de Justiça 0,017000 e 0,016150."
+            "question": "Resuma os acontecimentos dos últimos dias",
+            "expected_answer": "O personage X foi para a cidade Y para fazer uma viagem de negócios."
         }
     ]
     

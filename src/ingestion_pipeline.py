@@ -3,6 +3,7 @@ from typing import List, Optional
 from pathlib import Path
 from tqdm import tqdm
 import logging
+import pandas as pd
 
 from docling.document_converter import DocumentConverter
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -186,3 +187,58 @@ class IngestionPipeline:
                 logger.error(f"Could not load vector store: {e}")
                 return None
         return self.vector_store 
+
+    def process_dataframe(self, df: pd.DataFrame) -> None:
+        """
+        Process a DataFrame of cleaned logs and store them in the vector database.
+        
+        Args:
+            df: DataFrame containing cleaned log entries
+        """
+        if df.empty:
+            logger.warning("No data to process in DataFrame")
+            return
+            
+        # Convert DataFrame rows to documents
+        documents = []
+        for _, row in df.iterrows():
+            try:
+                # Create a context-rich text for better semantic search
+                context_text = f"Em {row['timestamp']}, {row['character']} ({row['race']}) estava em {row['location']}"
+                if pd.notna(row['audience']) and row['audience'] != "None":
+                    context_text += f" próximo de {row['audience']}"
+                context_text += f". {row['character']} disse: {row['message']}"
+                
+                # Create metadata with all relevant information
+                metadata = {
+                    "source": "cleaned_logs.csv",
+                    "timestamp": row['timestamp'],
+                    "character": row['character'],
+                    "race": row['race'],
+                    "location": row['location'],
+                    "audience": row['audience'] if pd.notna(row['audience']) else ""
+                }
+                
+                # Create document with context-rich text and metadata
+                doc = Document(
+                    page_content=context_text,
+                    metadata=metadata
+                )
+                documents.append(doc)
+                
+            except Exception as e:
+                logger.warning(f"Could not process row: {row}")
+                continue
+        
+        if not documents:
+            logger.warning("No documents were created from DataFrame")
+            return
+        
+        # Create vector store
+        self.vector_store = Chroma.from_documents(
+            documents=documents,
+            embedding=self.embeddings,
+            persist_directory=str(self.vector_store_path)
+        )
+        
+        logger.info(f"Processed {len(documents)} documents from DataFrame") 
