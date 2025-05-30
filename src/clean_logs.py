@@ -178,8 +178,26 @@ class LogCleaner:
             output_file (str): Name of the output file
         """
         output_path = self.root_dir / output_file
-        df.to_csv(output_path, index=False)
+        
+        # Save with proper quoting and escaping
+        df.to_csv(
+            output_path,
+            index=False,
+            quoting=1,  # QUOTE_ALL - quote all fields
+            escapechar='\\',  # Use backslash as escape character
+            encoding='utf-8'
+        )
         print(f"Saved cleaned logs to {output_path}")
+        
+        # Verify the file can be read back correctly
+        try:
+            test_df = pd.read_csv(output_path, encoding='utf-8')
+            if len(test_df) == len(df):
+                print("Verification successful: File can be read back correctly")
+            else:
+                print("Warning: Number of rows in saved file doesn't match original data")
+        except Exception as e:
+            print(f"Warning: Could not verify saved file: {str(e)}")
 
 def clean_log_files(directory: str = RAW_DATA_DIR):
     """
