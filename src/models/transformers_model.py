@@ -97,7 +97,7 @@ ESCOPOS DE ATENDIMENTO:
 - Relacionamentos: Análise de interações entre diferentes personagens e grupos"""
             
             # Format the prompt with the system message
-            formatted_prompt = f"<s>[INST] <<SYS>>\n{system_message}\n<</SYS>>\n\n{prompt} [/INST]"
+            formatted_prompt = f"{system_message}\n\nPergunta: {prompt}\n\nResposta:"
             
             inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
             
@@ -118,9 +118,9 @@ ESCOPOS DE ATENDIMENTO:
             # Decode and clean up the response
             response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
             
-            # Extract only the response part after the last [/INST]
-            if "[/INST]" in response:
-                response = response.split("[/INST]")[-1].strip()
+            # Extract only the response part after "Resposta:"
+            if "Resposta:" in response:
+                response = response.split("Resposta:")[-1].strip()
             
             return response
             

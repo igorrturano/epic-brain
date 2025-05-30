@@ -85,10 +85,10 @@ RAG_CONFIG = {
 MODEL_CONFIG = {
     "type": "transformers", #ollama, gguf
     "model_name": "maritaca-ai/sabia-7b",
-    "temperature": 0.7,
-    "max_tokens": 2048,
-    "use_4bit": True,  # Enable 4-bit quantization for memory efficiency
-    "device": "auto"   # Will use CUDA if available
+    "temperature": 0.3,  # Lower temperature for more focused responses
+    "max_tokens": 1024,   # Shorter responses since we're dealing with chat logs
+    "use_4bit": True,    # Enable 4-bit quantization for memory efficiency
+    "device": "auto"     # Will use CUDA if available
 }
 
 # Logging configuration
