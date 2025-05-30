@@ -141,8 +141,14 @@ class LogCleaner:
         """
         all_entries = []
         
-        # Find all log files matching the pattern
-        log_files = list(self.root_dir.glob(LOG_CONFIG["log_pattern"]))
+        # Find all log files matching the pattern recursively
+        log_files = list(self.root_dir.rglob('*.log'))
+        
+        if not log_files:
+            print(f"No log files found in {self.root_dir} or its subdirectories")
+            return pd.DataFrame()
+            
+        print(f"Found {len(log_files)} log files to process")
         
         for file_path in log_files:
             # Skip files that are too old

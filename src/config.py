@@ -16,7 +16,7 @@ VECTOR_STORE_DIR = DATA_DIR / "vector_store"
 # Log processing settings
 LOG_CONFIG = {
     "max_days_old": 5,  # Only process logs from the last 5 days
-    "log_pattern": "raw/players/*/*.log",  # Pattern to match log files
+    "log_pattern": "*.log",  # Pattern to match log files
     "date_format": "%d-%m-%Y",  # Format of dates in log file paths
 }
 
