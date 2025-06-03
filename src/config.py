@@ -66,7 +66,10 @@ API_CONFIG = {
     "debug": False,
     "title": "Epic Brain Chatbot API",
     "description": "API for UO Epic Shard",
-    "version": "1.0.0"
+    "version": "1.0.0",
+    "rate_limit": 1,  # requests per minute
+    "rate_limit_window": 600,  # seconds
+    "max_concurrent_requests": 1
 }
 
 # RAG Pipeline settings

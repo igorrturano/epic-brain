@@ -1,3 +1,3 @@
 """
-Chatbot PDF Jurídico - Main package
+Chatbot Epic Brain - Main package
 """ 

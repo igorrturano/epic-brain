@@ -73,7 +73,7 @@ class OllamaModel(BaseModel):
                         "stream": False,
                         "options": {
                             "stop": ["[INST]", "[/INST]"],  # Stop generation at these tokens
-                            "system": "Você é um assistente virtual do CNJ (Conselho Nacional de Justiça), especializado em atendimento ao usuário. Sua função é fornecer orientações claras e personalizadas em português, garantindo uma comunicação de qualidade."
+                            "system": "Você é um assistente virtual do Epic Brain (Shard de ULtima Online), especializado em atendimento ao usuário. Sua função é fornecer orientações claras e personalizadas em português, garantindo uma comunicação de qualidade."
                         }
                     },
                     timeout=self.timeout
