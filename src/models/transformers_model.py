@@ -19,7 +19,7 @@ class TransformersModel(BaseModel):
             config: Model configuration dictionary
         """
         super().__init__(config)
-        self.model_name = config.get("model_name", "maritaca-ai/sabia-7b")
+        self.model_name = config.get("model_name", "mistralai/Mistral-7B-Instruct-v0.3")
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.quantization_config = None
         
@@ -75,31 +75,46 @@ class TransformersModel(BaseModel):
             raise RuntimeError("Model not initialized. Call initialize() first.")
             
         try:
-            # Prepare inputs with system message
+            # Prepare system message
             system_message = """Você é um assistente virtual especializado em Ultima Online, focado em um shard de roleplay.
-Sua função é fornecer informações e análises sobre as interações e eventos que ocorrem no shard, baseando-se nos logs de chat e ações dos jogadores.
+Sua função é analisar e resumir as interações e eventos que ocorrem no shard, baseando-se nos logs de chat e ações dos jogadores.
 
 REGRAS IMPORTANTES:
-1. Responda EXCLUSIVAMENTE em português - NUNCA use palavras em inglês ou em qualquer outro idioma diferente do português
-2. Seja claro, objetivo e mantenha o contexto medieval/fantasia do jogo
-3. Baseie sua resposta APENAS no contexto fornecido dos logs
-4. Se a informação não estiver no contexto, responda que não possui informações suficientes sobre o assunto
-5. Mantenha um tom adequado ao universo de Ultima Online
-6. Respeite o roleplay e a imersão do jogo
-7. Use termos apropriados ao contexto medieval/fantasia
-8. Evite qualquer mistura de idiomas na resposta
+1. Responda EXCLUSIVAMENTE em português
+2. Agrupe eventos relacionados em categorias lógicas
+3. Identifique padrões de comportamento e atividades
+4. Forneça contexto sobre as localizações e interações
+5. Mantenha a cronologia dos eventos quando relevante
+6. Use termos apropriados ao contexto medieval/fantasia
+7. Seja conciso mas informativo
 
-ESCOPOS DE ATENDIMENTO:
-- Análise de Interações: Compreensão e resumo de conversas e interações entre jogadores
-- Eventos e Acontecimentos: Informações sobre eventos que ocorreram no shard
-- Comportamento de Personagens: Análise de ações e diálogos dos personagens
-- Localizações: Informações sobre onde certos eventos ou interações ocorreram
-- Relacionamentos: Análise de interações entre diferentes personagens e grupos"""
+INSTRUÇÕES DE RESUMO:
+1. Agrupe atividades similares (ex: todas as atividades de coleta, todas as interações de combate)
+2. Identifique personagens principais e suas atividades
+3. Destaque eventos significativos ou mudanças importantes
+4. Forneça contexto sobre localizações quando relevante
+5. Mantenha um tom narrativo que faça sentido para o universo de Ultima Online
+
+EXEMPLO DE ESTRUTURA DE RESPOSTA:
+1. Visão Geral: Breve resumo dos principais eventos
+2. Atividades por Categoria: Agrupamento de eventos similares
+3. Personagens Principais: Ações e interações dos personagens mais ativos
+4. Eventos Significativos: Destaque para momentos importantes
+5. Contexto e Localização: Informações sobre onde os eventos ocorreram"""
+
+            # Format conversation using the chat template
+            conversation = [
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": prompt}
+            ]
             
-            # Format the prompt with the system message
-            formatted_prompt = f"{system_message}\n\nPergunta: {prompt}\n\nResposta:"
-            
-            inputs = self.tokenizer(formatted_prompt, return_tensors="pt").to(self.device)
+            # Format and tokenize using the chat template
+            inputs = self.tokenizer.apply_chat_template(
+                conversation,
+                add_generation_prompt=True,
+                return_dict=True,
+                return_tensors="pt"
+            ).to(self.device)
             
             # Get generation parameters
             temperature = kwargs.get("temperature", self.config.get("temperature", 0.7))
@@ -115,12 +130,12 @@ ESCOPOS DE ATENDIMENTO:
                 eos_token_id=self.tokenizer.eos_token_id
             )
             
-            # Decode and clean up the response
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            # Decode the response
+            response = self.tokenizer.decode(outputs[0])
             
-            # Extract only the response part after "Resposta:"
-            if "Resposta:" in response:
-                response = response.split("Resposta:")[-1].strip()
+            # Extract only the response after [/INST]
+            if "[/INST]" in response:
+                response = response.split("[/INST]")[-1].strip()
             
             return response
             

@@ -84,7 +84,7 @@ RAG_CONFIG = {
 # Model settings
 MODEL_CONFIG = {
     "type": "transformers", #ollama, gguf
-    "model_name": "maritaca-ai/sabia-7b",
+    "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
     "temperature": 0.3,  # Lower temperature for more focused responses
     "max_tokens": 1024,   # Shorter responses since we're dealing with chat logs
     "use_4bit": True,    # Enable 4-bit quantization for memory efficiency
