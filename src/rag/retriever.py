@@ -135,6 +135,27 @@ class Reranker:
         """
         return self._is_initialized
 
+    def cleanup(self) -> None:
+        """
+        Clean up reranker resources and release GPU memory.
+        """
+        try:
+            if hasattr(self, 'model'):
+                # Move model to CPU
+                self.model.to('cpu')
+                # Delete model
+                del self.model
+                # Clear CUDA cache
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                logger.info(f"Cleaned up reranker model: {self.model_name}")
+            
+            self._is_initialized = False
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up reranker: {e}")
+            raise
+
 class ChromaRetriever(BaseRetriever):
     """
     ChromaDB-based retriever implementation with reranking support.
@@ -219,4 +240,38 @@ class ChromaRetriever(BaseRetriever):
             
         except Exception as e:
             logger.error(f"Error retrieving documents: {e}")
+            raise 
+
+    def cleanup(self) -> None:
+        """
+        Clean up retriever resources and release GPU memory.
+        """
+        try:
+            # Clean up reranker if enabled
+            if self.use_reranking and self.reranker:
+                self.reranker.cleanup()
+                self.reranker = None
+            
+            # Clean up embeddings
+            if hasattr(self, 'embeddings'):
+                if hasattr(self.embeddings, 'model'):
+                    # Move model to CPU
+                    self.embeddings.model.to('cpu')
+                    # Delete model
+                    del self.embeddings.model
+                del self.embeddings
+            
+            # Clean up vector store
+            if hasattr(self, 'vector_store'):
+                del self.vector_store
+            
+            # Clear CUDA cache
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            self._is_initialized = False
+            logger.info("Cleaned up Chroma retriever")
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up retriever: {e}")
             raise 

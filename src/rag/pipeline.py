@@ -129,4 +129,23 @@ Pergunta: {question}"""
         return {
             "retriever": self.retriever.get_config(),
             "model": self.model.get_config() if self.model else None
-        } 
+        }
+        
+    def cleanup(self) -> None:
+        """
+        Clean up RAG pipeline resources.
+        """
+        try:
+            # Clean up retriever
+            if self.retriever and hasattr(self.retriever, 'cleanup'):
+                self.retriever.cleanup()
+                logger.info("Cleaned up retriever in RAG pipeline")
+            
+            # Clean up model
+            if self.model and hasattr(self.model, 'cleanup'):
+                self.model.cleanup()
+                logger.info("Cleaned up model in RAG pipeline")
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up RAG pipeline: {e}")
+            raise 

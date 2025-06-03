@@ -142,3 +142,27 @@ EXEMPLO DE ESTRUTURA DE RESPOSTA:
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             raise 
+
+    def cleanup(self) -> None:
+        """
+        Clean up model resources and release GPU memory.
+        """
+        try:
+            if hasattr(self, '_model'):
+                # Move model to CPU
+                self._model.to('cpu')
+                # Delete model
+                del self._model
+                # Clear CUDA cache
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                logger.info(f"Cleaned up model: {self.model_name}")
+            
+            if hasattr(self, 'tokenizer'):
+                del self.tokenizer
+                
+            self._is_initialized = False
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up model: {e}")
+            raise 

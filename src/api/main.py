@@ -25,13 +25,111 @@ logger = logging.getLogger(__name__)
 # Get configuration
 config = get_config()
 
-# Initialize RAG pipeline
+# Initialize components
 rag_pipeline = None
+model = None
+retriever = None
+is_initialized = False
+initialization_lock = asyncio.Lock()
 
 # Rate limiting configuration
 request_timestamps = defaultdict(list)
 request_queue = asyncio.Queue()
 semaphore = asyncio.Semaphore(config["api"]["max_concurrent_requests"])
+
+async def initialize_resources():
+    """Initialize RAG pipeline and model resources."""
+    global rag_pipeline, model, retriever, is_initialized
+    
+    if is_initialized:
+        return
+        
+    async with initialization_lock:
+        if is_initialized:  # Double check after acquiring lock
+            return
+            
+        try:
+            logger.info("Initializing resources...")
+            
+            # Initialize model based on configuration
+            if config["model"]["type"] == "gguf":
+                model = GGUFModel(config["model"])
+            elif config["model"]["type"] == "ollama":
+                model = OllamaModel(config["model"])
+            elif config["model"]["type"] == "transformers":
+                model = TransformersModel(config["model"])
+            else:
+                raise ValueError(f"Unsupported model type: {config['model']['type']}")
+                
+            # Initialize retriever
+            retriever = ChromaRetriever(config["rag"])
+                
+            # Initialize RAG pipeline
+            rag_pipeline = RAGPipeline(
+                config=config["rag"],
+                retriever=retriever,
+                model=model
+            )
+            
+            rag_pipeline.initialize()
+            is_initialized = True
+            logger.info("Resources initialized successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize resources: {e}")
+            raise
+
+async def cleanup_resources():
+    """Clean up resources when they're no longer needed."""
+    global rag_pipeline, model, retriever, is_initialized
+    
+    if not is_initialized:
+        return
+        
+    async with initialization_lock:
+        if not is_initialized:  # Double check after acquiring lock
+            return
+            
+        try:
+            logger.info("Cleaning up resources...")
+            
+            # Clean up resources in reverse order of initialization
+            if rag_pipeline:
+                # Call cleanup method if it exists
+                if hasattr(rag_pipeline, 'cleanup'):
+                    rag_pipeline.cleanup()
+                rag_pipeline = None
+                
+            if retriever:
+                # Call cleanup method if it exists
+                if hasattr(retriever, 'cleanup'):
+                    retriever.cleanup()
+                retriever = None
+                
+            if model:
+                # Call cleanup method if it exists
+                if hasattr(model, 'cleanup'):
+                    model.cleanup()
+                # Force CUDA cache clear
+                if hasattr(model, 'model') and hasattr(model.model, 'to'):
+                    model.model.to('cpu')
+                model = None
+                
+            # Force CUDA cache clear
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    logger.info("CUDA cache cleared")
+            except ImportError:
+                pass
+                
+            is_initialized = False
+            logger.info("Resources cleaned up successfully")
+            
+        except Exception as e:
+            logger.error(f"Error cleaning up resources: {e}")
+            raise
 
 async def process_queue():
     """Process requests in the queue."""
@@ -39,13 +137,32 @@ async def process_queue():
         try:
             request_data = await request_queue.get()
             try:
+                # Initialize resources if needed
+                await initialize_resources()
+                
+                if not rag_pipeline:
+                    request_data["future"].set_exception(
+                        Exception("Failed to initialize RAG pipeline")
+                    )
+                    continue
+                
                 # Run synchronous function in a thread pool
                 loop = asyncio.get_event_loop()
                 result = await loop.run_in_executor(
                     None,
                     lambda: request_data["func"](*request_data["args"], **request_data["kwargs"])
                 )
-                request_data["future"].set_result(result)
+                
+                if result is None:
+                    request_data["future"].set_exception(
+                        Exception("Failed to process query")
+                    )
+                else:
+                    request_data["future"].set_result(result)
+                
+                # Clean up resources after processing
+                await cleanup_resources()
+                
             except Exception as e:
                 request_data["future"].set_exception(e)
             finally:
@@ -77,29 +194,6 @@ async def lifespan(app: FastAPI):
     try:
         # Start queue processor
         asyncio.create_task(process_queue())
-        
-        # Initialize model based on configuration
-        if config["model"]["type"] == "gguf":
-            model = GGUFModel(config["model"])
-        elif config["model"]["type"] == "ollama":
-            model = OllamaModel(config["model"])
-        elif config["model"]["type"] == "transformers":
-            model = TransformersModel(config["model"])
-        else:
-            raise ValueError(f"Unsupported model type: {config['model']['type']}")
-            
-        # Initialize retriever
-        retriever = ChromaRetriever(config["rag"])
-            
-        # Initialize RAG pipeline
-        rag_pipeline = RAGPipeline(
-            config=config["rag"],
-            retriever=retriever,
-            model=model
-        )
-        
-        rag_pipeline.initialize()
-        logger.info("RAG pipeline initialized successfully")
         
         yield
         
@@ -155,9 +249,6 @@ async def query_documents(request: QueryRequest, req: Request) -> QueryResponse:
     Returns:
         Query response containing the answer and sources
     """
-    if not rag_pipeline:
-        raise HTTPException(status_code=500, detail="RAG pipeline not initialized")
-    
     # Get client identifier (IP address)
     client_id = req.client.host
     
@@ -175,9 +266,9 @@ async def query_documents(request: QueryRequest, req: Request) -> QueryResponse:
         # Update max_results in config
         config["rag"]["k"] = request.max_results
         
-        # Add request to queue
+        # Add request to queue with the question directly
         await request_queue.put({
-            "func": rag_pipeline.query,
+            "func": lambda q: rag_pipeline.query(q) if rag_pipeline else None,
             "args": [request.question],
             "kwargs": {},
             "future": future
@@ -186,6 +277,11 @@ async def query_documents(request: QueryRequest, req: Request) -> QueryResponse:
         # Wait for result with timeout
         try:
             result = await asyncio.wait_for(future, timeout=600)  # seconds timeout
+            if result is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to initialize RAG pipeline"
+                )
         except asyncio.TimeoutError:
             raise HTTPException(
                 status_code=504,
