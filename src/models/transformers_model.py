@@ -23,14 +23,16 @@ class TransformersModel(BaseModel):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.quantization_config = None
         
-        # Setup quantization if specified
-        if config.get("use_4bit", True):
+        # Setup quantization if specified and CUDA is available
+        if config.get("use_4bit", True) and torch.cuda.is_available():
             self.quantization_config = BitsAndBytesConfig(
                 load_in_4bit=True,
                 bnb_4bit_compute_dtype=torch.float16,
                 bnb_4bit_quant_type="nf4",
                 bnb_4bit_use_double_quant=True,
             )
+        elif config.get("use_4bit", True) and not torch.cuda.is_available():
+            logger.warning("4-bit quantization requested but CUDA not available. Running in full precision mode.")
         
     def initialize(self) -> None:
         """
@@ -45,13 +47,25 @@ class TransformersModel(BaseModel):
                 trust_remote_code=True
             )
             
+            # Load model with appropriate configuration
+            model_kwargs = {
+                "device_map": "auto" if torch.cuda.is_available() else None,
+                "trust_remote_code": True
+            }
+            
+            # Add quantization config only if CUDA is available
+            if self.quantization_config and torch.cuda.is_available():
+                model_kwargs["quantization_config"] = self.quantization_config
+            
             # Load model
             self._model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
-                device_map="auto",
-                quantization_config=self.quantization_config,
-                trust_remote_code=True
+                **model_kwargs
             )
+            
+            # Move model to CPU if CUDA is not available
+            if not torch.cuda.is_available():
+                self._model = self._model.to(self.device)
             
             self._is_initialized = True
             logger.info(f"Successfully initialized model: {self.model_name}")
