@@ -4,20 +4,25 @@ from typing import Dict, Any
 import logging
 import sys
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv(override=True)
 
 # Base directory setup
 BASE_DIR = Path(__file__).parent.parent
 
 # Data directories
-DATA_DIR = BASE_DIR / "data"
-RAW_DATA_DIR = BASE_DIR / "raw"
-VECTOR_STORE_DIR = DATA_DIR / "vector_store"
+DATA_DIR = Path(os.getenv("DATA_DIR", str(BASE_DIR / "data")))
+RAW_DATA_DIR = Path(os.getenv("RAW_DATA_DIR", str(BASE_DIR / "raw")))
+VECTOR_STORE_DIR = Path(os.getenv("VECTOR_STORE_DIR", str(DATA_DIR / "vector_store")))
+LOGS_DIR = Path(os.getenv("LOGS_DIR", str(BASE_DIR / "logs")))
 
 # Log processing settings
 LOG_CONFIG = {
-    "max_days_old": 5,  # Only process logs from the last 5 days
-    "log_pattern": "*.log",  # Pattern to match log files
-    "date_format": "%d-%m-%Y",  # Format of dates in log file paths
+    "max_days_old": int(os.getenv("LOG_MAX_DAYS_OLD", "5")),
+    "log_pattern": os.getenv("LOG_PATTERN", "*.log"),
+    "date_format": os.getenv("LOG_DATE_FORMAT", "%d-%m-%Y"),
 }
 
 # Model parameters
@@ -34,7 +39,7 @@ def create_directories():
         DATA_DIR,
         RAW_DATA_DIR,
         VECTOR_STORE_DIR,
-        BASE_DIR / "logs"
+        LOGS_DIR
     ]
     
     for directory in directories:
@@ -47,7 +52,7 @@ def setup_logging():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
-            logging.FileHandler(BASE_DIR / "logs" / "app.log", encoding='utf-8'),
+            logging.FileHandler(LOGS_DIR / "app.log", encoding='utf-8'),
             logging.StreamHandler(sys.stdout)
         ]
     )
@@ -61,37 +66,37 @@ def setup_logging():
 
 # API settings
 API_CONFIG = {
-    "host": "0.0.0.0",
-    "port": 8000,
-    "debug": False,
-    "title": "Epic Brain Chatbot API",
-    "description": "API for UO Epic Shard",
-    "version": "1.0.0",
-    "rate_limit": 1,  # requests per minute
-    "rate_limit_window": 600,  # seconds
-    "max_concurrent_requests": 1
+    "host": os.getenv("API_HOST", "0.0.0.0"),
+    "port": int(os.getenv("API_PORT", "8000")),
+    "debug": os.getenv("API_DEBUG", "false").lower() == "true",
+    "title": os.getenv("API_TITLE", "Epic Brain Chatbot API"),
+    "description": os.getenv("API_DESCRIPTION", "API for UO Epic Shard"),
+    "version": os.getenv("API_VERSION", "1.0.0"),
+    "rate_limit": int(os.getenv("API_RATE_LIMIT", "1")),
+    "rate_limit_window": int(os.getenv("API_RATE_LIMIT_WINDOW", "600")),
+    "max_concurrent_requests": int(os.getenv("API_MAX_CONCURRENT_REQUESTS", "1"))
 }
 
 # RAG Pipeline settings
 RAG_CONFIG = {
-    "embedding_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
-    "k": 4,
-    "score_threshold": 0.7,
+    "embedding_model": os.getenv("RAG_EMBEDDING_MODEL", "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"),
+    "k": int(os.getenv("RAG_K", "4")),
+    "score_threshold": float(os.getenv("RAG_SCORE_THRESHOLD", "0.7")),
     "vector_store_path": str(VECTOR_STORE_DIR),
-    "use_reranking": True,
-    "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
-    "reranker_top_k": 4,
-    "initial_retrieval_multiplier": 2  # Number of documents to retrieve before reranking
+    "use_reranking": os.getenv("RAG_USE_RERANKING", "true").lower() == "true",
+    "reranker_model": os.getenv("RAG_RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"),
+    "reranker_top_k": int(os.getenv("RAG_RERANKER_TOP_K", "4")),
+    "initial_retrieval_multiplier": int(os.getenv("RAG_INITIAL_RETRIEVAL_MULTIPLIER", "2"))
 }
 
 # Model settings
 MODEL_CONFIG = {
-    "type": "transformers", #ollama, gguf
-    "model_name": "mistralai/Mistral-7B-Instruct-v0.3",
-    "temperature": 0.3,  # Lower temperature for more focused responses
-    "max_tokens": 1024,   # Shorter responses since we're dealing with chat logs
-    "use_4bit": True,    # Enable 4-bit quantization for memory efficiency
-    "device": "auto"     # Will use CUDA if available
+    "type": os.getenv("MODEL_TYPE", "transformers"),
+    "model_name": os.getenv("MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.3")),
+    "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "1024")),
+    "use_4bit": os.getenv("MODEL_USE_4BIT", "true").lower() == "true",
+    "device": os.getenv("MODEL_DEVICE", "auto")
 }
 
 # Logging configuration
@@ -113,7 +118,7 @@ LOGGING_CONFIG = {
         "file": {
             "class": "logging.FileHandler",
             "formatter": "default",
-            "filename": str(BASE_DIR / "logs" / "app.log"),
+            "filename": str(LOGS_DIR / "app.log"),
             "level": "DEBUG",
             "encoding": "utf-8"
         }
