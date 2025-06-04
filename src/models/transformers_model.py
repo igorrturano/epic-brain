@@ -50,26 +50,35 @@ class TransformersModel(BaseModel):
             # Load model with appropriate configuration
             model_kwargs = {
                 "device_map": "auto" if torch.cuda.is_available() else None,
-                "trust_remote_code": True
+                "trust_remote_code": True,
+                "low_cpu_mem_usage": True,  # Enable low CPU memory usage
+                "torch_dtype": torch.float32 if not torch.cuda.is_available() else torch.float16
             }
             
             # Add quantization config only if CUDA is available
             if self.quantization_config and torch.cuda.is_available():
                 model_kwargs["quantization_config"] = self.quantization_config
             
-            # Load model
-            self._model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                **model_kwargs
-            )
-            
-            # Move model to CPU if CUDA is not available
-            if not torch.cuda.is_available():
-                self._model = self._model.to(self.device)
-            
-            self._is_initialized = True
-            logger.info(f"Successfully initialized model: {self.model_name}")
-            
+            try:
+                # Load model
+                self._model = AutoModelForCausalLM.from_pretrained(
+                    self.model_name,
+                    **model_kwargs
+                )
+                
+                # Move model to CPU if CUDA is not available
+                if not torch.cuda.is_available():
+                    self._model = self._model.to(self.device)
+                
+                self._is_initialized = True
+                logger.info(f"Successfully initialized model: {self.model_name}")
+                
+            except Exception as e:
+                logger.error(f"Failed to load model: {str(e)}")
+                if "out of memory" in str(e).lower():
+                    logger.error("Out of memory error. Consider using a smaller model or increasing swap space.")
+                raise
+                
         except Exception as e:
             logger.error(f"Failed to initialize Transformers model: {e}")
             raise
