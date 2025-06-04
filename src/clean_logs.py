@@ -180,6 +180,9 @@ class LogCleaner:
         """
         output_path = self.output_dir / output_file
         
+        # Create output directory if it doesn't exist
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        
         # Delete old cleaned log files
         try:
             # Find all existing cleaned log files
