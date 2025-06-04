@@ -7,7 +7,7 @@ import pandas as pd
 from config import RAW_DATA_DIR, LOG_CONFIG, LOGS_DIR
 
 class LogCleaner:
-    def __init__(self, directory: str = RAW_DATA_DIR):
+    def __init__(self, directory: str = LOGS_DIR):
         """
         Initialize the LogCleaner.
         
@@ -17,6 +17,7 @@ class LogCleaner:
         self.root_dir = Path(directory)
         self.max_days_old = LOG_CONFIG["max_days_old"]
         self.date_format = LOG_CONFIG["date_format"]
+        self.output_dir = RAW_DATA_DIR
         
     def is_file_recent(self, file_path: Path) -> bool:
         """
@@ -177,12 +178,12 @@ class LogCleaner:
             df (pd.DataFrame): DataFrame containing cleaned logs
             output_file (str): Name of the output file
         """
-        output_path = self.root_dir / output_file
+        output_path = self.output_dir / output_file
         
         # Delete old cleaned log files
         try:
             # Find all existing cleaned log files
-            old_files = list(self.root_dir.glob("cleaned_logs*.csv"))
+            old_files = list(self.output_dir.glob("cleaned_logs*.csv"))
             for old_file in old_files:
                 try:
                     old_file.unlink()
