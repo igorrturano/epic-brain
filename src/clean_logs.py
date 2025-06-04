@@ -4,7 +4,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import pandas as pd
-from config import RAW_DATA_DIR, LOG_CONFIG
+from config import RAW_DATA_DIR, LOG_CONFIG, LOGS_DIR
 
 class LogCleaner:
     def __init__(self, directory: str = RAW_DATA_DIR):
@@ -212,7 +212,7 @@ class LogCleaner:
         except Exception as e:
             print(f"Warning: Could not verify saved file: {str(e)}")
 
-def clean_log_files(directory: str = RAW_DATA_DIR):
+def clean_log_files(directory: str = LOGS_DIR):
     """
     Clean all log files in the given directory and its subdirectories.
     
@@ -233,6 +233,6 @@ def clean_log_files(directory: str = RAW_DATA_DIR):
     cleaner.save_cleaned_logs(df)
 
 if __name__ == '__main__':
-    print(f"Starting to clean log files in {RAW_DATA_DIR}...")
+    print(f"Starting to clean log files in {LOGS_DIR}...")
     clean_log_files()
     print("Finished cleaning log files.") 
