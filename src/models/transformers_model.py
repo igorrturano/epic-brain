@@ -60,12 +60,13 @@ class TransformersModel(BaseModel):
             logger.error(f"Failed to initialize Transformers model: {e}")
             raise
             
-    def generate(self, prompt: str, **kwargs) -> str:
+    def generate(self, prompt: str, system_message: Optional[str] = None, **kwargs) -> str:
         """
         Generate a response from the model.
         
         Args:
             prompt: The input prompt
+            system_message: Optional custom system message. If None, uses default.
             **kwargs: Additional generation parameters
             
         Returns:
@@ -75,8 +76,9 @@ class TransformersModel(BaseModel):
             raise RuntimeError("Model not initialized. Call initialize() first.")
             
         try:
-            # Prepare system message
-            system_message = """Você é um assistente virtual especializado em Ultima Online, focado em um shard de roleplay.
+            # Use default system message if none provided
+            if system_message is None:
+                system_message = """Você é um assistente virtual especializado em Ultima Online, focado em um shard de roleplay.
 Sua função é analisar e resumir as interações e eventos que ocorrem no shard, baseando-se nos logs de chat e ações dos jogadores.
 
 REGRAS IMPORTANTES:

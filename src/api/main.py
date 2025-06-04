@@ -237,6 +237,14 @@ class QueryResponse(BaseModel):
     answer: str
     sources: List[str]
 
+class TranslationRequest(BaseModel):
+    target: str
+    origin: str
+    text: str
+
+class TranslationResponse(BaseModel):
+    translated_text: str
+
 @app.post("/query", response_model=QueryResponse)
 async def query_documents(request: QueryRequest, req: Request) -> QueryResponse:
     """
@@ -295,6 +303,71 @@ async def query_documents(request: QueryRequest, req: Request) -> QueryResponse:
         
     except Exception as e:
         logger.error(f"Error processing query: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/translate", response_model=TranslationResponse)
+async def translate_text(request: TranslationRequest, req: Request) -> TranslationResponse:
+    """
+    Translate text between languages using the model.
+    
+    Args:
+        request: Translation request containing source text and languages
+        req: FastAPI request object for client identification
+        
+    Returns:
+        Translation response containing the translated text
+    """
+    # Get client identifier (IP address)
+    client_id = req.client.host
+    
+    # Check rate limit
+    if not await check_rate_limit(client_id):
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please try again later."
+        )
+    
+    try:
+        # Create a future for the result
+        future = asyncio.Future()
+        
+        # Create translation system message
+        system_message = f"""You are a professional translator. Your task is to translate text from {request.origin} to {request.target}.
+Follow these rules:
+1. Maintain the original meaning and context
+2. Use natural language in the target language
+3. Preserve any special formatting or symbols
+4. Keep proper names unchanged
+5. Translate only the text provided, nothing more"""
+
+        # Add request to queue
+        await request_queue.put({
+            "func": lambda q, sys_msg: model.generate(q, system_message=sys_msg) if model else None,
+            "args": [request.text, system_message],
+            "kwargs": {},
+            "future": future
+        })
+        
+        # Wait for result with timeout
+        try:
+            result = await asyncio.wait_for(future, timeout=60)  # 60 seconds timeout
+            if result is None:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to initialize model"
+                )
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=504,
+                detail="Request timed out. Please try again."
+            )
+        
+        return TranslationResponse(
+            translated_text=result
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing translation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
