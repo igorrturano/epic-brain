@@ -306,26 +306,16 @@ async def query_documents(request: QueryRequest, req: Request) -> QueryResponse:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/translate", response_model=TranslationResponse)
-async def translate_text(request: TranslationRequest, req: Request) -> TranslationResponse:
+async def translate_text(request: TranslationRequest) -> TranslationResponse:
     """
     Translate text between languages using the model.
     
     Args:
         request: Translation request containing source text and languages
-        req: FastAPI request object for client identification
         
     Returns:
         Translation response containing the translated text
     """
-    # Get client identifier (IP address)
-    client_id = req.client.host
-    
-    # Check rate limit
-    if not await check_rate_limit(client_id):
-        raise HTTPException(
-            status_code=429,
-            detail="Too many requests. Please try again later."
-        )
     
     try:
         # Create a future for the result
@@ -338,7 +328,8 @@ Follow these rules:
 2. Use natural language in the target language
 3. Preserve any special formatting or symbols
 4. Keep proper names unchanged
-5. Translate only the text provided, nothing more"""
+5. Translate only the text provided, nothing more
+6. Respond with ONLY the translated text, no explanations or additional content"""
 
         # Add request to queue
         await request_queue.put({
@@ -359,7 +350,7 @@ Follow these rules:
         except asyncio.TimeoutError:
             raise HTTPException(
                 status_code=504,
-                detail="Request timed out. Please try again."
+                detail="Translation request timed out. Please try again."
             )
         
         return TranslationResponse(

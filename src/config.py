@@ -96,7 +96,8 @@ MODEL_CONFIG = {
     "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.3")),
     "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "1024")),
     "use_4bit": os.getenv("MODEL_USE_4BIT", "true").lower() == "true",
-    "device": os.getenv("MODEL_DEVICE", "auto")
+    "device": os.getenv("MODEL_DEVICE", "auto"),
+    "stop_word": os.getenv("MODEL_STOP_WORD", "[/INST]")
 }
 
 # Logging configuration

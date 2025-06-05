@@ -101,44 +101,34 @@ class TransformersModel(BaseModel):
         try:
             # Use default system message if none provided
             if system_message is None:
-                system_message = """Você é um assistente virtual especializado em Ultima Online, focado em um shard de roleplay.
-Sua função é analisar e resumir as interações e eventos que ocorrem no shard, baseando-se nos logs de chat e ações dos jogadores.
+                system_message = """Você é um assistente especializado em analisar logs de Ultima Online.
+Sua tarefa é resumir as atividades e interações dos personagens de forma clara e concisa.
 
-REGRAS IMPORTANTES:
-1. Responda EXCLUSIVAMENTE em português
-2. Agrupe eventos relacionados em categorias lógicas
-3. Identifique padrões de comportamento e atividades
-4. Forneça contexto sobre as localizações e interações
-5. Mantenha a cronologia dos eventos quando relevante
-6. Use termos apropriados ao contexto medieval/fantasia
-7. Seja conciso mas informativo
+REGRAS:
+1. Responda em português
+2. Seja direto e objetivo
+3. Foque nos eventos mais relevantes
+4. Inclua localizações importantes
+5. Mencione outros personagens relevantes
+6. Mantenha a cronologia dos eventos
 
-INSTRUÇÕES DE RESUMO:
-1. Agrupe atividades similares (ex: todas as atividades de coleta, todas as interações de combate)
-2. Identifique personagens principais e suas atividades
-3. Destaque eventos significativos ou mudanças importantes
-4. Forneça contexto sobre localizações quando relevante
-5. Mantenha um tom narrativo que faça sentido para o universo de Ultima Online
+FORMATO DA RESPOSTA:
+Resumo das atividades do personagem:
+[Resumo conciso das principais atividades]
 
-EXEMPLO DE ESTRUTURA DE RESPOSTA:
-1. Visão Geral: Breve resumo dos principais eventos
-2. Atividades por Categoria: Agrupamento de eventos similares
-3. Personagens Principais: Ações e interações dos personagens mais ativos
-4. Eventos Significativos: Destaque para momentos importantes
-5. Contexto e Localização: Informações sobre onde os eventos ocorreram"""
+Eventos principais:
+- [Lista de eventos relevantes com localizações]
 
-            # Format conversation using the chat template
-            conversation = [
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": prompt}
-            ]
+Observações: [Comportamento ou padrões observados]"""
+
+            # Format conversation using Gemma's format
+            formatted_prompt = f"<start_of_turn>user\n{system_message}\n\n{prompt}<end_of_turn>\n<start_of_turn>model\n"
             
-            # Format and tokenize using the chat template
-            inputs = self.tokenizer.apply_chat_template(
-                conversation,
-                add_generation_prompt=True,
-                return_dict=True,
-                return_tensors="pt"
+            # Tokenize the formatted prompt
+            inputs = self.tokenizer(
+                formatted_prompt,
+                return_tensors="pt",
+                add_special_tokens=True
             ).to(self.device)
             
             # Get generation parameters
@@ -158,9 +148,18 @@ EXEMPLO DE ESTRUTURA DE RESPOSTA:
             # Decode the response
             response = self.tokenizer.decode(outputs[0])
             
-            # Extract only the response after [/INST]
-            if "[/INST]" in response:
-                response = response.split("[/INST]")[-1].strip()
+            # Clean up the response by removing the prompt and any template markers
+            response = response.replace(formatted_prompt, "")
+            if self.config.get("stop_word", "<end_of_turn>") in response:
+                response = response.split(self.config.get("stop_word", "<end_of_turn>"))[0]
+            
+            # Remove special tokens
+            special_tokens = ["<bos>", "<eos>", "<pad>", "<unk>"]
+            for token in special_tokens:
+                response = response.replace(token, "")
+            
+            # Remove any leading/trailing whitespace
+            response = response.strip()
             
             return response
             
