@@ -91,13 +91,14 @@ RAG_CONFIG = {
 
 # Model settings
 MODEL_CONFIG = {
-    "type": os.getenv("MODEL_TYPE", "transformers"),
-    "model_name": os.getenv("MODEL_NAME", "mistralai/Mistral-7B-Instruct-v0.3"),
+    "type": os.getenv("MODEL_TYPE", "openai"),
+    "model_name": os.getenv("MODEL_NAME", "gpt-3.5-turbo"),
     "temperature": float(os.getenv("MODEL_TEMPERATURE", "0.3")),
     "max_tokens": int(os.getenv("MODEL_MAX_TOKENS", "1024")),
     "use_4bit": os.getenv("MODEL_USE_4BIT", "true").lower() == "true",
     "device": os.getenv("MODEL_DEVICE", "auto"),
-    "stop_word": os.getenv("MODEL_STOP_WORD", "[/INST]")
+    "stop_word": os.getenv("MODEL_STOP_WORD", "[/INST]"),
+    "api_key": os.getenv("OPENAI_API_KEY", "")
 }
 
 # Logging configuration

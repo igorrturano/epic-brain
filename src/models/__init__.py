@@ -1,6 +1,7 @@
-from models.base import BaseModel
-from models.gguf import GGUFModel
-from models.ollama import OllamaModel
-from models.transformers_model import TransformersModel
+from .base import BaseModel
+from .transformers_model import TransformersModel
+from .ollama import OllamaModel
+from .gguf import GGUFModel
+from .openai_model import OpenAIModel
 
-__all__ = ["BaseModel", "GGUFModel", "OllamaModel", "TransformersModel"] 
+__all__ = ['BaseModel', 'TransformersModel', 'OllamaModel', 'GGUFModel', 'OpenAIModel'] 
